@@ -1,0 +1,13 @@
+# built game
+build/
+*.exe
+*.zip
+
+# files the game writes next to itself
+combine_baler_day*.png
+combine_baler_crash.txt
+
+# test artifacts (frame dumps, audio preview)
+out/
+*.test
+*.wav
