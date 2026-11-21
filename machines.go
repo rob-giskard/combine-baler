@@ -9,8 +9,8 @@ const (
 	tapX, tapY = 359.0 + OX, 92.0 + OY // stand here to take the hose
 	nozX, nozY = 352.0 + OX, 84.0 + OY // where the hose leaves the reel
 	HoseLen    = 72.0                  // about four truck lengths
-	BoostTime  = 2.5                   // seconds of lingering speed-up
-	DashTime   = 0.6                   // the first part of it: the dash
+	BoostTime  = 3.5                   // seconds of lingering speed-up
+	DashTime   = 0.9                   // the first part of it: the dash
 	BoostCD    = 4.0
 	EngineMax  = 3
 	EngineStep = 0.12 // top speed per engine level
