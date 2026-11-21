@@ -29,10 +29,17 @@ const (
 	SBoing
 	SNope
 	SYawn
+	SBoost
+	SSpray
+	SSnap
+	SSparkle
+	SHornCombine
+	SHornTruck
 )
 
 type voice struct {
 	f0, f1, dur, t, vol, noise, ph float64
+	horn                           bool // held, reedy tone instead of a ping
 }
 
 type pluck struct {
@@ -161,6 +168,29 @@ func (a *Audio) Play(id int) {
 		v(160, 120, 0.14, 0.12, 0.1, 0)
 	case SYawn:
 		v(420, 240, 0.5, 0.035, 0, 0)
+	case SBoost: // whoosh and a kick of the engine
+		v(2400, 500, 0.45, 0.07, 1, 0)
+		v(110, 220, 0.35, 0.16, 0.2, 0)
+	case SSpray:
+		v(5000, 4200, 0.3, 0.03, 1, 0)
+	case SSnap:
+		v(900, 200, 0.12, 0.10, 0.4, 0)
+		v(300, 150, 0.1, 0.08, 0.1, 0.1)
+	case SSparkle:
+		for i, f := range []float64{1568, 2093, 2637, 3136} {
+			v(f, f, 0.2, 0.05, 0, float64(i)*0.05)
+		}
+	case SHornCombine: // a low two-tone honk
+		hv := func(f, vol, delay float64) {
+			a.voices = append(a.voices, voice{f0: f, f1: f * 0.98, dur: 0.42, vol: vol, t: -delay, horn: true})
+		}
+		hv(196, 0.13, 0)
+		hv(247, 0.10, 0)
+	case SHornTruck: // a higher beep-beep
+		for _, d := range []float64{0, 0.17} {
+			a.voices = append(a.voices, voice{f0: 392, f1: 392, dur: 0.13, vol: 0.11, t: -d, horn: true},
+				voice{f0: 494, f1: 494, dur: 0.13, vol: 0.08, t: -d, horn: true})
+		}
 	case SDayEnd:
 		for i, f := range []float64{523.25, 659.25, 783.99, 1046.5} {
 			v(f, f, 1.0, 0.13, 0, float64(i)*0.16)
@@ -264,7 +294,12 @@ func (a *Audio) Fill(out []int16) {
 				fr := v.t / v.dur
 				v.ph += 2 * math.Pi * (v.f0 + (v.f1-v.f0)*fr) / SampleRate
 				env := (1 - fr) * (1 - fr) * math.Min(1, v.t/0.004)
-				s += env * v.vol * ((1-v.noise)*math.Sin(v.ph) + v.noise*a.noiseS())
+				tone := math.Sin(v.ph)
+				if v.horn {
+					env = math.Min(1, v.t/0.015) * math.Min(1, (1-fr)/0.2)
+					tone = 0.6*math.Sin(v.ph) + 0.3*math.Sin(2*v.ph) + 0.18*math.Sin(3*v.ph) + 0.1*math.Sin(4*v.ph)
+				}
+				s += env * v.vol * ((1-v.noise)*tone + v.noise*a.noiseS())
 			}
 			a.voices[n] = v
 			n++

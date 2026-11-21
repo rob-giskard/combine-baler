@@ -33,6 +33,7 @@ const (
 	TWheat
 	TStubble
 	TDirt
+	TFlat // wheat pressed flat by a boosting truck; cannot be baled
 )
 
 const (
@@ -40,6 +41,7 @@ const (
 	StPlay
 	StPause
 	StSummary
+	StSettings
 )
 
 const (
@@ -59,10 +61,12 @@ const (
 	KA     = 0x41
 	KD     = 0x44
 	KE     = 0x45
+	KI     = 0x49
 	KK     = 0x4B
 	KL     = 0x4C
 	KM     = 0x4D
 	KN     = 0x4E
+	KO     = 0x4F
 	KP     = 0x50
 	KQ     = 0x51
 	KR     = 0x52
@@ -75,6 +79,7 @@ type Particle struct {
 	x, y, vx, vy, life, size float64
 	c                        uint32
 	ch                       rune // when set, drawn as a letter (sleepy Z's)
+	ring                     bool // drawn as an expanding ring (horns)
 }
 
 type Bale struct{ x, y int }
@@ -96,6 +101,14 @@ type Vehicle struct {
 	tint             int
 	baleAcc          int
 	exhaustT, dropT  float64
+
+	kx, ky, spin    float64 // knockback from bouncy trees
+	boost, boostCD  float64 // seconds of boost left, cooldown left
+	mud             float64 // 0 clean .. 1 clogged
+	sparkle, hornCD float64
+	reapT           float64 // cut wheat in the last moment
+	contact         bool    // touching something last step
+	bumpT           float64
 }
 
 type Player struct {
@@ -113,25 +126,54 @@ type Player struct {
 	shopSel int
 	shake   float64
 	last    Input
+
+	fx, fy  float64 // facing direction on foot
+	kx, ky  float64 // knockback (bounced off a tree)
+	hop     float64 // seconds of a little hop left
+	hose    bool    // holding the wash hose
+	sprayT  float64
+	fed     bool // egg sandwich today: tiredness builds at half speed
+	bun     bool // cinnamon bun today: +10% speed
+	kite    bool
+	kiteX   float64
+	kiteY   float64
+	kiteT   float64
+	hornCD  float64
+	bounceT float64
 }
 
-type Input struct{ up, down, left, right, act, use bool }
+type Input struct {
+	up, down, left, right, act, use bool
+	actHeld, boost, horn            bool
+}
 
 type Game struct {
 	fb    []uint32
+	fbs   [2][]uint32 // one framebuffer per window
 	tile  []uint8
 	col   []uint32 // terrain colour per cell
 	obj   []uint32 // baked object colour per cell (0 = none)
-	solid []bool
+	kind  []uint8  // what blocks movement in a cell (CNone, CHard, CTree)
+	trees []Tree
 
 	veh      []Vehicle
 	pl       []Player
 	NPlayers int
 	menuSel  int
 	mapView  bool
-	spr      [40 * 38]uint32
+	spr      [52 * 38]uint32
 	clip0    int
 	clip1    int
+	clipY0   int
+	clipY1   int
+
+	Set              Settings
+	setFrom, setPage int
+	setSel           int
+	waitKey          bool
+	Engine           int  // engine upgrade level, 0..EngineMax
+	BigBed, WideReap bool // shop upgrades
+	wind             float64
 
 	State       int
 	Quit        bool
@@ -141,6 +183,7 @@ type Game struct {
 	CutTotal    int
 	WheatTotal  int
 	Stubble     int
+	Flat        int // cells pressed flat by boosting trucks
 	BaleCount   int // bales made
 	Stored      int // bales delivered to the pad
 	StoredToday int
@@ -182,23 +225,27 @@ func (g *Game) rnd() float64 {
 
 func NewGame() *Game {
 	g := &Game{
-		fb:    make([]uint32, SW*SH),
-		tile:  make([]uint8, WW*WH),
-		col:   make([]uint32, WW*WH),
-		obj:   make([]uint32, WW*WH),
-		solid: make([]bool, WW*WH),
-		rng:   0x9E3779B9,
-		Day:   1,
-		State: StTitle,
-		Snd:   NewAudio(),
-		clip1: SW,
+		fb:     make([]uint32, SW*SH),
+		tile:   make([]uint8, WW*WH),
+		col:    make([]uint32, WW*WH),
+		obj:    make([]uint32, WW*WH),
+		kind:   make([]uint8, WW*WH),
+		rng:    0x9E3779B9,
+		Day:    1,
+		State:  StTitle,
+		Snd:    NewAudio(),
+		clip1:  SW,
+		clipY1: SH,
+		Set:    loadSettings(),
 	}
+	g.fbs[0] = g.fb
+	g.Snd.MusicOn = g.Set.MusicOn
 	g.buildWorld()
 	g.setup(1)
 	return g
 }
 
-// setup places the machines and farmers for a 1 or 2 player game.
+// setup places the machines and farmers for a 1, 2 or 3 player game.
 func (g *Game) setup(n int) {
 	g.NPlayers = n
 	g.veh = []Vehicle{
@@ -206,11 +253,20 @@ func (g *Game) setup(n int) {
 		{kind: VTruck, sx: 452 + OX, sy: 115 + OY},
 	}
 	g.pl = []Player{{home: 0}}
-	if n == 2 {
+	if n >= 2 {
 		g.veh = append(g.veh,
 			Vehicle{kind: VCombine, sx: 300 + OX, sy: 115 + OY, tint: 1},
 			Vehicle{kind: VTruck, sx: 476 + OX, sy: 115 + OY, tint: 1})
 		g.pl = append(g.pl, Player{home: 2})
+	}
+	if n == 3 {
+		g.veh = append(g.veh,
+			Vehicle{kind: VCombine, sx: 260 + OX, sy: 115 + OY, tint: 2},
+			Vehicle{kind: VTruck, sx: 500 + OX, sy: 115 + OY, tint: 2})
+		g.pl = append(g.pl, Player{home: 4})
+	}
+	for i := range g.pl {
+		g.pl[i].fy = 1
 	}
 	g.park()
 }
@@ -220,6 +276,7 @@ func (g *Game) park() {
 	for i := range g.veh {
 		v := &g.veh[i]
 		v.x, v.y, v.ang, v.speed, v.header, v.driver = v.sx, v.sy, math.Pi, 0, false, -1
+		v.kx, v.ky, v.spin, v.boost = 0, 0, 0, 0
 	}
 	for i := range g.pl {
 		p := &g.pl[i]
@@ -231,51 +288,7 @@ func (g *Game) park() {
 	g.mapView = false
 }
 
-func (g *Game) split() bool { return g.NPlayers == 2 && g.State != StTitle }
-
-func (g *Game) view(i int) (x, w int) {
-	if !g.split() {
-		return 0, SW
-	}
-	if i == 0 {
-		return 0, SW/2 - 1
-	}
-	return SW/2 + 1, SW/2 - 1
-}
-
 // ---------------------------------------------------------------- update
-
-var probes = [2][][2]float64{
-	{{0, 0}, {-5, -8}, {5, -8}, {-9, 10}, {9, 10}, {-5, 5}, {5, 5}, {0, 10}, {-4.5, 10}, {4.5, 10}, {0, -8}},
-	{{0, 0}, {-5, 9}, {5, 9}, {-5, -9}, {5, -9}, {0, 9}, {0, -9}, {-5, 0}, {5, 0}},
-}
-var vehRadius = [2]float64{9, 7.5}
-
-func (g *Game) solidAt(wx, wy float64) bool {
-	ix, iy := int(math.Floor(wx)), int(math.Floor(wy))
-	return ix < 1 || iy < 1 || ix >= WW-1 || iy >= WH-1 || g.solid[iy*WW+ix]
-}
-
-func (g *Game) blocked(vi int, x, y, a float64) bool {
-	v := &g.veh[vi]
-	s, c := math.Sin(a), math.Cos(a)
-	for _, p := range probes[v.kind] {
-		if g.solidAt(x+p[0]*c+p[1]*s, y+p[0]*s-p[1]*c) {
-			return true
-		}
-	}
-	for j := range g.veh {
-		if j == vi {
-			continue
-		}
-		o := &g.veh[j]
-		dn := math.Hypot(x-o.x, y-o.y)
-		if dn < vehRadius[v.kind]+vehRadius[o.kind] && dn < math.Hypot(v.x-o.x, v.y-o.y) {
-			return true
-		}
-	}
-	return false
-}
 
 func (g *Game) walkBlocked(x, y float64) bool {
 	return g.solidAt(x-1.5, y) || g.solidAt(x+1.5, y) || g.solidAt(x-1.5, y+2) || g.solidAt(x+1.5, y+2)
@@ -284,7 +297,7 @@ func (g *Game) walkBlocked(x, y float64) bool {
 func (g *Game) Tonnes(cells int) float64 { return float64(cells) * KgPerCell / 1000 }
 
 func (g *Game) FieldPct() float64 {
-	return 100 * float64(g.Stubble) / float64(g.WheatTotal)
+	return 100 * float64(g.Stubble+g.Flat) / float64(g.WheatTotal)
 }
 
 func (g *Game) ClockString() string {
@@ -295,19 +308,23 @@ func (g *Game) ClockString() string {
 func (g *Game) say(s string) { g.toast, g.toastT = strings.ToUpper(s), 3.5 }
 
 func (g *Game) input(i int, keys *[256]bool) Input {
-	hit := func(k int) bool { return keys[k] && !g.prev[k] }
+	hit := func(k uint8) bool { return keys[k] && !g.prev[k] }
 	var in Input
-	if i == 0 || g.NPlayers == 1 {
-		in.up, in.down, in.left, in.right = keys[KW], keys[KS], keys[KA], keys[KD]
-		in.act, in.use = hit(KSpace), hit(KE)
+	sets := []int{i}
+	if g.NPlayers == 1 {
+		sets = []int{0, 1} // one player: both key sets drive
 	}
-	if i == 1 || g.NPlayers == 1 {
-		in.up = in.up || keys[KUp]
-		in.down = in.down || keys[KDown]
-		in.left = in.left || keys[KLeft]
-		in.right = in.right || keys[KRight]
-		in.act = in.act || hit(KL)
-		in.use = in.use || hit(KK)
+	for _, s := range sets {
+		km := &g.Set.Keys[s]
+		in.up = in.up || keys[km[AUp]]
+		in.down = in.down || keys[km[ADown]]
+		in.left = in.left || keys[km[ALeft]]
+		in.right = in.right || keys[km[ARight]]
+		in.act = in.act || hit(km[AReap])
+		in.actHeld = in.actHeld || keys[km[AReap]]
+		in.use = in.use || hit(km[AUse])
+		in.boost = in.boost || hit(km[ABoost])
+		in.horn = in.horn || hit(km[AHorn])
 	}
 	return in
 }
@@ -332,7 +349,7 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 		g.toastT -= dt
 	}
 	if hit(KP) {
-		if name, err := g.SavePicture(""); err == nil {
+		if name, err := g.SavePicture(fileDir); err == nil {
 			g.say("SAVED " + name)
 		} else {
 			g.say("COULD NOT SAVE PICTURE")
@@ -348,11 +365,19 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 
 	switch g.State {
 	case StTitle:
-		if hit(KUp) || hit(KDown) || hit(KW) || hit(KS) {
-			g.menuSel = 1 - g.menuSel
+		if hit(KUp) || hit(KW) {
+			g.menuSel = (g.menuSel + 3) % 4
+			g.Snd.Play(SMenu)
+		}
+		if hit(KDown) || hit(KS) {
+			g.menuSel = (g.menuSel + 1) % 4
 			g.Snd.Play(SMenu)
 		}
 		if hit(KEnter) || hit(KSpace) {
+			if g.menuSel == 3 {
+				g.openSettings()
+				return
+			}
 			g.setup(g.menuSel + 1)
 			g.State = StPlay
 			g.park()
@@ -362,6 +387,9 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 			g.Quit = true
 		}
 		return
+	case StSettings:
+		g.settingsInput(hit, keys)
+		return
 	case StPause:
 		switch {
 		case hit(KEsc) || hit(KEnter):
@@ -369,10 +397,12 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 		case hit(KN):
 			g.State = StPlay
 			g.sleep()
+		case hit(KS):
+			g.openSettings()
 		case hit(KM):
-			snd, fb, sel := g.Snd, g.fb, g.NPlayers-1
+			snd, set, sel := g.Snd, g.Set, g.NPlayers-1
 			*g = *NewGame()
-			g.Snd, g.fb, g.menuSel = snd, fb, sel
+			g.Snd, g.Set, g.menuSel = snd, set, sel
 		case hit(KQ):
 			g.Quit = true
 		}
@@ -413,7 +443,14 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 		}
 		if p.veh < 0 {
 			g.walk(p, in, dt)
+			if p.hose && in.actHeld {
+				g.spray(i, dt)
+			}
 			if in.use {
+				if p.hose {
+					g.hangHose(i, false)
+					continue
+				}
 				g.interact(i)
 				if g.State != StPlay {
 					return
@@ -434,8 +471,15 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 				g.Snd.Play(SReapOff)
 			}
 		}
+		if in.boost {
+			g.tryBoost(p.veh)
+		}
+		if in.horn {
+			g.honk(p.veh)
+		}
 		g.drive(p.veh, in, dt)
 	}
+	g.machines(dt)
 
 	reaping := false
 	var cOn, tOn bool
@@ -453,9 +497,13 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 		if v.kind == VCombine {
 			if g.work(v, dt) > 0 {
 				reaping = true
+				v.reapT = 0.3
 			}
+			v.reapT -= dt
+			g.muddy(v, dt, v.reapT > 0)
 		} else {
 			g.haul(v, dt)
+			g.muddy(v, dt, false)
 		}
 	}
 	g.Snd.SetState(cOn, cSpd, tOn, tSpd, reaping)
@@ -476,27 +524,45 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 
 func (g *Game) zoomTarget(i int) float64 {
 	p := &g.pl[i]
-	two := g.NPlayers == 2
-	pick := func(one, split float64) float64 {
-		if two {
-			return split
-		}
-		return one
+	r := g.viewOf(i)
+	if g.mapView {
+		return math.Min(float64(r.w)/WW, float64(r.h)/WH)
 	}
-	switch {
-	case g.mapView:
-		return pick(SH/float64(WH), (SW/2-1)/float64(WW))
-	case p.veh < 0:
+	if p.veh < 0 {
 		return 4
-	case g.veh[p.veh].kind == VTruck:
-		return pick(2.6, 2.2)
-	case g.veh[p.veh].header:
-		return pick(1.6, 1.3)
 	}
-	return pick(4, 3)
+	// smaller views see a little more of the farm
+	f := math.Cbrt(float64(r.w*r.h) / (SW * SH))
+	v := &g.veh[p.veh]
+	switch {
+	case v.kind == VTruck:
+		return 2.6 * f / (1 + 0.4*v.boostFrac()) // zoom out while boosting
+	case v.header:
+		return 1.6 * f
+	}
+	return 4 * f
 }
 
 func (g *Game) walk(p *Player, in Input, dt float64) {
+	if p.hop > 0 {
+		p.hop -= dt
+	}
+	if p.bounceT > 0 {
+		p.bounceT -= dt
+	}
+	if p.kx != 0 || p.ky != 0 { // bounced off a tree
+		if nx := p.x + p.kx*dt; !g.walkBlocked(nx, p.y) {
+			p.x = nx
+		}
+		if ny := p.y + p.ky*dt; !g.walkBlocked(p.x, ny) {
+			p.y = ny
+		}
+		d := math.Exp(-6 * dt)
+		p.kx, p.ky = p.kx*d, p.ky*d
+		if math.Hypot(p.kx, p.ky) < 0.5 {
+			p.kx, p.ky = 0, 0
+		}
+	}
 	dx, dy := 0.0, 0.0
 	if in.left {
 		dx--
@@ -518,9 +584,13 @@ func (g *Game) walk(p *Player, in Input, dt float64) {
 		p.faceL = dx < 0
 	}
 	l := math.Hypot(dx, dy)
+	p.fx, p.fy = dx/l, dy/l
 	sp := 17 * (1 - 0.25*p.tired)
 	if p.fizz > 0 {
 		sp *= 1.2
+	}
+	if p.bun {
+		sp *= 1.1
 	}
 	dx, dy = dx/l*sp*dt, dy/l*sp*dt
 	if !g.walkBlocked(p.x+dx, p.y) {
@@ -567,8 +637,14 @@ func (g *Game) drive(vi int, in Input, dt float64) {
 	if v.kind == VTruck {
 		maxF, maxR, acc, turn = 46, 18, 60, 2.1
 	}
-	if v.driver >= 0 {
-		maxF *= 1 - 0.3*g.pl[v.driver].tired // sleepy farmers drive gently
+	m := g.speedMult(v)
+	maxF, maxR = maxF*m, maxR*m
+	if f := v.boostFrac(); f > 0 {
+		maxF *= 1 + 0.6*f
+		acc *= 1 + 3*f
+		if v.boost > BoostTime-DashTime {
+			v.speed = math.Max(v.speed, maxF) // the dash itself
+		}
 	}
 	switch {
 	case in.up && !in.down:
@@ -598,24 +674,18 @@ func (g *Game) drive(vi int, in Input, dt float64) {
 	if v.speed < 0 {
 		steer = -steer
 	}
-	na := v.ang + steer*turn*grip*dt
-	nx := v.x + math.Sin(na)*v.speed*dt
-	ny := v.y - math.Cos(na)*v.speed*dt
-	if !g.blocked(vi, nx, ny, na) {
-		v.x, v.y, v.ang = nx, ny, na
-	} else if !g.blocked(vi, nx, ny, v.ang) {
-		v.x, v.y = nx, ny
-	} else {
-		if math.Abs(v.speed) > 8 {
-			g.Snd.Play(SBump)
-		}
-		v.speed = -v.speed * 0.25
-	}
+	g.move(vi, v.ang+steer*turn*grip*dt+v.spin*dt, dt)
+	g.unstick(vi)
 	v.tread += v.speed * dt
 
 	v.exhaustT -= dt
-	if v.exhaustT <= 0 && (in.up || in.down) {
+	clogged := v.mud >= 1
+	if v.exhaustT <= 0 && (in.up || in.down || clogged && v.driver >= 0) {
 		v.exhaustT = 0.09
+		col, size := uint32(0x8A8A90), 1.5
+		if clogged { // coughing dark smoke
+			v.exhaustT, col, size = 0.18, 0x4A4038, 2.2
+		}
 		s, c := math.Sin(v.ang), math.Cos(v.ang)
 		r, f := 2.5, -5.5
 		if v.kind == VTruck {
@@ -624,7 +694,7 @@ func (g *Game) drive(vi int, in Input, dt float64) {
 		g.parts = append(g.parts, Particle{
 			x: v.x + r*c + f*s, y: v.y + r*s - f*c,
 			vx: (g.rnd() - 0.5) * 3, vy: -4 - g.rnd()*3,
-			life: 0.7 + g.rnd()*0.4, size: 1.5, c: 0x8A8A90})
+			life: 0.7 + g.rnd()*0.4, size: size, c: col})
 	}
 }
 
@@ -636,8 +706,9 @@ func (g *Game) work(v *Vehicle, dt float64) int {
 	v.reel += dt * 9
 	s, c := math.Sin(v.ang), math.Cos(v.ang)
 	cut := 0
+	hw := g.headerHalf()
 	for f := 6.5; f <= 10.0; f += 0.5 {
-		for r := -9.0; r <= 9.0; r += 0.5 {
+		for r := -hw; r <= hw; r += 0.5 {
 			x := int(math.Floor(v.x + r*c + f*s))
 			y := int(math.Floor(v.y + r*s - f*c))
 			if x < 0 || y < 0 || x >= WW || y >= WH || g.tile[y*WW+x] != TWheat {
@@ -684,7 +755,7 @@ func (g *Game) haul(v *Vehicle, dt float64) {
 	}
 	s, c := math.Sin(v.ang), math.Cos(v.ang)
 	var gone []Bale
-	for i := len(g.bales) - 1; i >= 0 && v.load < TruckCap; i-- {
+	for i := len(g.bales) - 1; i >= 0 && v.load < g.truckCap(); i-- {
 		b := g.bales[i]
 		dx, dy := float64(b.x)+3-v.x, float64(b.y)+2.5-v.y
 		if math.Abs(dx*c+dy*s) < 7.5 && math.Abs(dx*s-dy*c) < 11 {
@@ -740,15 +811,9 @@ func (g *Game) ambient(dt float64) {
 
 func (g *Game) updateCamera(i int) {
 	p := &g.pl[i]
-	fx, fy := p.x, p.y
-	if p.veh >= 0 {
-		fx, fy = g.veh[p.veh].x, g.veh[p.veh].y
-	}
-	vw := SW
-	if g.NPlayers == 2 {
-		vw = SW/2 - 1
-	}
-	hw, hh := float64(vw)/2/p.zoom, SH/2/p.zoom
+	fx, fy := g.pos(p)
+	r := g.viewOf(i)
+	hw, hh := float64(r.w)/2/p.zoom, float64(r.h)/2/p.zoom
 	p.camX, p.camY = fx, fy
 	if 2*hw >= WW {
 		p.camX = WW / 2
@@ -776,23 +841,28 @@ func blend(a, b uint32, t uint32) uint32 { // t 0..255 of b
 }
 
 // body paint: main, light, dark, neck, grill
-var combinePaint = [2][5]uint32{
+var combinePaint = [3][5]uint32{
 	{0x2FA07E, 0x56C9A2, 0x1C6B55, 0x1F7A63, 0x24876B},
 	{0x3A7BD5, 0x74ABF2, 0x24509A, 0x2B5DAE, 0x2F68BE},
+	{0x9A55C0, 0xBE86DE, 0x683488, 0x77409A, 0x8648AC},
 }
-var truckPaint = [2][3]uint32{
+var truckPaint = [3][3]uint32{
 	{0xD8452E, 0xF2775A, 0x9A2A1A},
 	{0xE8A52A, 0xFFCB5E, 0xA86E12},
+	{0x2FA8B8, 0x6AD2DE, 0x1C6E7A},
 }
 
 // buildSprite draws vehicle v into g.spr and returns its size in texels
 // (front of the machine at the top).
 func (g *Game) buildSprite(v *Vehicle) (w, h int) {
 	w, h = 40, 38
+	o := 0 // the combine's body sits this far in from the header's edge
 	if v.kind == VTruck {
 		w, h = 16, 28
+	} else if g.WideReap {
+		w, o = 52, 6
 	}
-	sp := g.spr[:]
+	sp := g.spr[:w*h]
 	for i := range sp {
 		sp[i] = 0
 	}
@@ -833,86 +903,121 @@ func (g *Game) buildSprite(v *Vehicle) (w, h int) {
 		fill(3, 6, 13, 10, pt[1])
 		fill(1, 11, 15, 28, 0x7A4A2A) // bed
 		fill(2, 12, 14, 27, 0xB5773A)
+		if g.BigBed { // raised sides
+			fill(1, 11, 2, 28, 0x5A3418)
+			fill(14, 11, 15, 28, 0x5A3418)
+		}
 		for y := 14; y < 27; y += 3 {
 			fill(2, y, 14, y+1, 0xA3682F)
 		}
 		for n := 0; n < v.load; n++ {
-			u0, v0 := 2+(n%2)*6, 12+(n/2)*3
+			k, lift := n, 0
+			if n >= TruckCap { // second layer, stacked on top
+				k, lift = n-TruckCap+3, 1
+			}
+			u0, v0 := 2+(k%2)*6, 12+(k/2)*3-lift
 			fill(u0, v0, u0+6, v0+3, 0xF2C24A)
 			fill(u0, v0, u0+6, v0+1, 0xFFE07A)
 			fill(u0+5, v0, u0+6, v0+3, 0xC8922A)
 		}
 		fill(1, 27, 3, 28, 0xE02A2A)
 		fill(13, 27, 15, 28, 0xE02A2A)
+		g.mudSpeckle(v, sp, w, h)
 		return
 	}
 	pt := combinePaint[v.tint]
 	// header
-	fill(1, 0, 39, 2, 0x55555E)
-	for u := 3; u < 37; u += 2 {
+	fill(1, 0, w-1, 2, 0x55555E)
+	for u := 3; u < w-3; u += 2 {
 		sp[u] = 0xB8B8C4
 	}
-	fill(1, 2, 39, 9, 0xC8402A)
-	fill(3, 3, 37, 8, 0x6E2618)
+	fill(1, 2, w-1, 9, 0xC8402A)
+	fill(3, 3, w-3, 8, 0x6E2618)
 	ph := int(v.reel) % 5
 	for k := 0; k < 2; k++ {
 		y := 3 + (ph+k*3)%5
-		fill(3, y, 37, y+1, 0xF2E3B0)
+		fill(3, y, w-3, y+1, 0xF2E3B0)
 	}
-	fill(19, 3, 21, 8, 0xC8402A)
+	fill(w/2-1, 3, w/2+1, 8, 0xC8402A)
 	fill(1, 0, 3, 9, 0xA8321E)
-	fill(37, 0, 39, 9, 0xA8321E)
-	fill(15, 9, 25, 13, pt[3]) // feeder neck
-	wheel(5, 12, 10, 24)
-	wheel(30, 12, 35, 24)
-	wheel(7, 28, 10, 35)
-	wheel(30, 28, 33, 35)
+	fill(w-3, 0, w-1, 9, 0xA8321E)
+	fill(15+o, 9, 25+o, 13, pt[3]) // feeder neck
+	wheel(5+o, 12, 10+o, 24)
+	wheel(30+o, 12, 35+o, 24)
+	wheel(7+o, 28, 10+o, 35)
+	wheel(30+o, 28, 33+o, 35)
 	// body
-	fill(10, 12, 30, 35, pt[0])
-	fill(10, 12, 30, 13, pt[1])
-	fill(11, 13, 12, 34, pt[1])
-	fill(10, 12, 11, 35, pt[2])
-	fill(29, 12, 30, 35, pt[2])
-	fill(10, 34, 30, 35, pt[2])
+	fill(10+o, 12, 30+o, 35, pt[0])
+	fill(10+o, 12, 30+o, 13, pt[1])
+	fill(11+o, 13, 12+o, 34, pt[1])
+	fill(10+o, 12, 11+o, 35, pt[2])
+	fill(29+o, 12, 30+o, 35, pt[2])
+	fill(10+o, 34, 30+o, 35, pt[2])
 	// cabin
-	fill(13, 13, 27, 21, 0xF4F0E0)
-	fill(14, 13, 26, 16, 0x9FDDEE)
-	fill(15, 14, 18, 15, 0xE6FAFF)
-	fill(15, 17, 25, 20, 0xE2DCC8)
+	fill(13+o, 13, 27+o, 21, 0xF4F0E0)
+	fill(14+o, 13, 26+o, 16, 0x9FDDEE)
+	fill(15+o, 14, 18+o, 15, 0xE6FAFF)
+	fill(15+o, 17, 25+o, 20, 0xE2DCC8)
 	if v.header && int(g.clock*4)%2 == 0 {
-		fill(19, 18, 21, 19, 0xFF9A1E)
+		fill(19+o, 18, 21+o, 19, 0xFF9A1E)
 	} else {
-		fill(19, 18, 21, 19, 0xB86A1A)
+		fill(19+o, 18, 21+o, 19, 0xB86A1A)
 	}
 	// grain tank
-	fill(13, 22, 27, 31, pt[2])
-	fill(14, 23, 26, 30, 0xF0B429)
+	fill(13+o, 22, 27+o, 31, pt[2])
+	fill(14+o, 23, 26+o, 30, 0xF0B429)
 	for i := 0; i < 14; i++ {
 		hh := hash(i, 7)
-		sp[(23+int(hh%7))*w+14+int(hh>>8%12)] = 0xFFD860
+		sp[(23+int(hh%7))*w+14+o+int(hh>>8%12)] = 0xFFD860
 	}
 	// engine
-	fill(13, 32, 27, 34, pt[2])
+	fill(13+o, 32, 27+o, 34, pt[2])
 	for u := 14; u < 27; u += 2 {
-		sp[32*w+u] = pt[4]
-		sp[33*w+u] = pt[4]
+		sp[32*w+u+o] = pt[4]
+		sp[33*w+u+o] = pt[4]
 	}
-	fill(24, 31, 26, 33, 0x333338)
+	fill(24+o, 31, 26+o, 33, 0x333338)
+	g.mudSpeckle(v, sp, w, h)
 	return
+}
+
+// mudSpeckle splashes mud over a sprite: more of it as the mud builds, and
+// more low down and towards the back.
+func (g *Game) mudSpeckle(v *Vehicle, sp []uint32, w, h int) {
+	if v.mud < 0.02 {
+		return
+	}
+	for t := 0; t < h; t++ {
+		for u := 0; u < w; u++ {
+			i := t*w + u
+			if sp[i] == 0 {
+				continue
+			}
+			edge := math.Min(1, math.Min(float64(u), float64(w-1-u))/4)
+			weight := 0.35 + 0.45*float64(t)/float64(h) + 0.3*(1-edge)
+			hh := hash(u*7+v.tint*101, t*13+v.kind*57)
+			if float64(hh%1000)/1000 < v.mud*0.55*weight {
+				sp[i] = [3]uint32{0x6A4520, 0x7E5428, 0x58381A}[hh>>12%3]
+			}
+		}
+	}
 }
 
 // view transform for the viewport being drawn
 type cam struct {
 	x, y, z float64
-	vx, vw  int
+	r       rect
 }
 
-func (c cam) sx(wx float64) float64 { return (wx-c.x)*c.z + float64(c.vx) + float64(c.vw)/2 }
-func (c cam) sy(wy float64) float64 { return (wy-c.y)*c.z + SH/2 }
+func (c cam) sx(wx float64) float64 { return (wx-c.x)*c.z + float64(c.r.x) + float64(c.r.w)/2 }
+func (c cam) sy(wy float64) float64 { return (wy-c.y)*c.z + float64(c.r.y) + float64(c.r.h)/2 }
 
 func (g *Game) drawVehicle(v *Vehicle, cm cam, shadow bool) {
 	w, h := g.buildSprite(v)
 	hw, ff, ts := 10.0, 10.5, 0.5 // half width, front, cells per texel
+	if v.kind == VCombine && g.WideReap {
+		hw = 13
+	}
 	if v.kind == VTruck {
 		hw, ff, ts = 5.2, 9.1, 0.65
 	}
@@ -924,7 +1029,7 @@ func (g *Game) drawVehicle(v *Vehicle, cm cam, shadow bool) {
 	cx, cy := cm.sx(v.x+ox), cm.sy(v.y+oy)
 	rad := int(15*z) + 2
 	s, c := math.Sin(v.ang), math.Cos(v.ang)
-	for py := max(int(cy)-rad, 0); py <= min(int(cy)+rad, SH-1); py++ {
+	for py := max(int(cy)-rad, g.clipY0); py <= min(int(cy)+rad, g.clipY1-1); py++ {
 		for px := max(int(cx)-rad, g.clip0); px <= min(int(cx)+rad, g.clip1-1); px++ {
 			dx := (float64(px) + 0.5 - cx) / z
 			dy := (float64(py) + 0.5 - cy) / z
@@ -1007,11 +1112,18 @@ var farmerArt = [2][16]string{{
 func (g *Game) drawFarmer(i int, cm cam) {
 	p := &g.pl[i]
 	band, shirt, dungarees := uint32(0xD8402A), uint32(0xE8563A), uint32(0x3A6BC5)
-	if i == 1 {
+	switch i {
+	case 1:
 		band, shirt, dungarees = 0x3A7BD5, 0xF4F0E0, 0x3E9A5A
+	case 2:
+		band, shirt, dungarees = 0x2FA07E, 0xF6C83A, 0x8A4FB0
 	}
 	ts := cm.z / 2
-	x0, y0 := cm.sx(p.x-3), cm.sy(p.y-5.5)
+	lift := 0.0
+	if p.hop > 0 { // a startled little jump
+		lift = math.Sin(math.Pi*p.hop/0.4) * 2.5
+	}
+	x0, y0 := cm.sx(p.x-3), cm.sy(p.y-5.5-lift)
 	fr := 0
 	if p.moving && int(p.walk)%2 == 1 {
 		fr = 1
@@ -1049,7 +1161,7 @@ func (g *Game) drawFarmer(i int, cm cam) {
 			}
 			wx := int(math.Floor(p.x - 3 + (float64(u)+0.5)/2))
 			wy := p.y - 5.5 + (float64(t)+0.5)/2
-			if g.tileAt(wx, feet) == TWheat || g.tileAt(wx, feet+1) == TWheat {
+			if lift == 0 && (g.tileAt(wx, feet) == TWheat || g.tileAt(wx, feet+1) == TWheat) {
 				top := p.y + 2.5 - 3 - float64(tuftArc[wx&7])*0.75
 				if wy >= top+0.5 {
 					c = wheatTex(wx, int(math.Floor(wy)))
@@ -1063,7 +1175,7 @@ func (g *Game) drawFarmer(i int, cm cam) {
 }
 
 func (g *Game) rect(x0, y0, x1, y1 int, c uint32) {
-	for y := max(y0, 0); y < min(y1, SH); y++ {
+	for y := max(y0, g.clipY0); y < min(y1, g.clipY1); y++ {
 		for x := max(x0, g.clip0); x < min(x1, g.clip1); x++ {
 			g.fb[y*SW+x] = c
 		}
@@ -1071,7 +1183,7 @@ func (g *Game) rect(x0, y0, x1, y1 int, c uint32) {
 }
 
 func (g *Game) rectA(x0, y0, x1, y1 int, c uint32, a uint32) {
-	for y := max(y0, 0); y < min(y1, SH); y++ {
+	for y := max(y0, g.clipY0); y < min(y1, g.clipY1); y++ {
 		for x := max(x0, g.clip0); x < min(x1, g.clip1); x++ {
 			g.fb[y*SW+x] = blend(g.fb[y*SW+x], c, a)
 		}
@@ -1115,17 +1227,15 @@ func (g *Game) cellColor(x, y int) uint32 {
 	return g.col[i]
 }
 
-func (g *Game) renderView(i int) {
-	p := &g.pl[i]
-	vx, vw := g.view(i)
-	g.clip0, g.clip1 = vx, vx+vw
-	cm := cam{p.camX, p.camY, p.zoom, vx, vw}
+func (g *Game) renderView(i int, r rect) {
+	g.clip0, g.clip1, g.clipY0, g.clipY1 = r.x, r.x+r.w, r.y, r.y+r.h
+	cm := g.camOf(i, r)
 	inv := 1 / cm.z
-	x0 := cm.x - (float64(vw)/2-0.5)*inv
-	y0 := cm.y - (SH/2-0.5)*inv
-	for sy := 0; sy < SH; sy++ {
+	x0 := cm.x - (float64(r.w)/2-0.5)*inv
+	y0 := cm.y - (float64(r.h)/2-0.5)*inv
+	for sy := 0; sy < r.h; sy++ {
 		wy := int(math.Floor(y0 + float64(sy)*inv))
-		row := g.fb[sy*SW+vx : sy*SW+vx+vw]
+		row := g.fb[(r.y+sy)*SW+r.x : (r.y+sy)*SW+r.x+r.w]
 		for sx := range row {
 			wx := int(math.Floor(x0 + float64(sx)*inv))
 			if wx < 0 || wy < 0 || wx >= WW || wy >= WH {
@@ -1143,22 +1253,36 @@ func (g *Game) renderView(i int) {
 			row[sx] = c
 		}
 	}
+	g.drawTreeShadows(cm)
 	for j := range g.veh {
 		g.drawVehicle(&g.veh[j], cm, true)
 	}
 	for j := range g.veh {
 		g.drawVehicle(&g.veh[j], cm, false)
 	}
+	g.drawHoses(cm)
 	for j := range g.pl {
 		if g.pl[j].veh < 0 {
 			g.drawFarmer(j, cm)
 		}
 	}
 	g.drawBalls(cm)
+	g.drawCanopy(cm)
 	for _, pt := range g.parts {
 		px, py := cm.sx(pt.x), cm.sy(pt.y)
 		if pt.ch != 0 {
 			g.textO(int(px), int(py), string(pt.ch), 1, pt.c)
+			continue
+		}
+		if pt.ring { // a horn: an expanding ring
+			k := 1 - pt.life/0.6
+			rr := (4 + k*pt.size) * cm.z
+			a := uint32(200 * (1 - k))
+			for n := 0; n < 48; n++ {
+				an := float64(n) * math.Pi / 24
+				qx, qy := int(px+math.Cos(an)*rr), int(py+math.Sin(an)*rr*0.8)
+				g.rectA(qx, qy, qx+2, qy+2, pt.c, a)
+			}
 			continue
 		}
 		sz := max(int(pt.size*cm.z), 1)
@@ -1168,29 +1292,21 @@ func (g *Game) renderView(i int) {
 		}
 		g.rectA(int(px)-sz/2, int(py)-sz/2, int(px)-sz/2+sz, int(py)-sz/2+sz, pt.c, a)
 	}
+	g.drawKites(cm)
+	for j := range g.veh { // muddy machines carry a little gauge
+		v := &g.veh[j]
+		if v.mud > 0.75 {
+			g.mudClock(int(cm.sx(v.x)), int(cm.sy(v.y-15)), max(3, int(2.2*cm.z)), v.mud)
+		}
+	}
 	g.prompt(i, cm)
 	if cm.z < 0.7 && int(g.clock*3)%2 == 0 { // who is where on the map
 		for j := range g.pl {
-			q := &g.pl[j]
-			x, y := q.x, q.y
-			if q.veh >= 0 {
-				x, y = g.veh[q.veh].x, g.veh[q.veh].y
-			}
+			x, y := g.pos(&g.pl[j])
 			px, py := int(cm.sx(x)), int(cm.sy(y))
 			g.rect(px-4, py-4, px+4, py+4, 0x5A3418)
-			g.rect(px-3, py-3, px+3, py+3, [2]uint32{0xFFFFFF, 0x74ABF2}[j])
+			g.rect(px-3, py-3, px+3, py+3, [3]uint32{0xFFFFFF, 0x74ABF2, 0xBE86DE}[j])
 		}
 	}
-	g.clip0, g.clip1 = 0, SW
-}
-
-func (g *Game) Render() {
-	for i := range g.pl {
-		g.renderView(i)
-	}
-	g.lighting()
-	if g.split() {
-		g.rect(SW/2-1, 0, SW/2+1, SH, 0x5A3418)
-	}
-	g.hud()
+	g.clip0, g.clip1, g.clipY0, g.clipY1 = 0, SW, 0, SH
 }

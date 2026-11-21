@@ -92,7 +92,7 @@ var artMoon = []string{
 	"...MMMMM.",
 	"....MMM..",
 }
-var artItem = [4][]string{{ // coffee
+var artItem = [NItems][]string{{ // coffee
 	"....w..w....",
 	"...w..w.....",
 	"....w..w....",
@@ -144,7 +144,117 @@ var artItem = [4][]string{{ // coffee
 	"y....YY.....",
 	"............",
 	"............",
+}, { // egg sandwich
+	"............",
+	"............",
+	"...cccccc...",
+	"..cWWWWWWc..",
+	".cWWWWWWWWc.",
+	".GGGGGGGGGG.",
+	".wwwYYYwwww.",
+	".wwYYYYYwww.",
+	".cccccccccc.",
+	".cWWWWWWWWc.",
+	"..cccccccc..",
+	"............",
+}, { // cinnamon bun
+	"............",
+	"...bbbbbb...",
+	"..bccccccb..",
+	".bccbbbbccb.",
+	".bcbccccbcb.",
+	".bcbcbbcbcb.",
+	".bcbcbccbcb.",
+	".bcbccbbcbb.",
+	".bccbbbccb..",
+	"..bcccccb...",
+	"...bbbbb....",
+	"............",
+}, { // kite
+	".....xx.....",
+	"....xxxx....",
+	"...xxxxYY...",
+	"..xxxxYYYY..",
+	".xxxxYYYYYY.",
+	"..YYYYxxxx..",
+	"...YYYxxx...",
+	"....YYxx....",
+	".....w......",
+	"......w.x...",
+	".......w....",
+	"......x.w...",
+}, { // faster engines
+	"....kkkk....",
+	"...kffffk...",
+	"..kfk..kfk..",
+	".kfk.k..kfk.",
+	".kf...k..fk.",
+	".kf....kkfk.",
+	".kf......fk.",
+	"..kk....kk..",
+	"............",
+	"..yy.yy.yy..",
+	".yy.yy.yy...",
+	"............",
+}, { // bigger truck bed
+	"............",
+	"oo........oo",
+	"obBBBBBBBBbo",
+	"obBdBBBdBBbo",
+	"obBBBBBBBBbo",
+	"oobBBBBBBboo",
+	"ooBBBdBBBBoo",
+	"obBBBBBBBBbo",
+	"obbbbbbbbbbo",
+	"oooooooooooo",
+	".kk......kk.",
+	"............",
+}, { // wide reaper
+	"............",
+	"kkkkkkkkkkkk",
+	"qxxxxxxxxxxq",
+	"qwwwwwwwwwwq",
+	"qxxxxxxxxxxq",
+	"qwwwwwwwwwwq",
+	"qqqqqqqqqqqq",
+	"....GGGG....",
+	"...GGGGGG...",
+	"...GgggGG...",
+	"...GGGGGG...",
+	"............",
 }}
+
+var artBoost = []string{
+	"...ff....",
+	"....ff...",
+	"ff...ff..",
+	".ff...ff.",
+	"..ff...ff",
+	".ff...ff.",
+	"ff...ff..",
+	"....ff...",
+	"...ff....",
+}
+var artBelly = []string{ // egg sandwich: full belly
+	"..ccccc..",
+	".cWWWWWc.",
+	"cWWWWWWWc",
+	"GGGGGGGGG",
+	"wwYYYwwww",
+	"ccccccccc",
+	".cWWWWWc.",
+	"..ccccc..",
+}
+var artBun = []string{
+	"..bbbbb..",
+	".bcccccb.",
+	"bccbbbccb",
+	"bcbcccbcb",
+	"bcbcbcbcb",
+	"bccbbccbb",
+	".bcccccb.",
+	"..bbbbb..",
+}
 
 // art draws string pixel art; with outline it gets a dark rim first.
 func (g *Game) art(x, y, sc int, rows []string, outline bool) {
@@ -170,22 +280,26 @@ func (g *Game) art(x, y, sc int, rows []string, outline bool) {
 
 // keyCap draws a floating key with a small label over it.
 func (g *Game) keyCap(bx, by int, key, label string) {
-	by = max(by, 26)
+	by = max(by, g.clipY0+26)
 	g.textO(bx-textW(label, 1)/2, by-22, label, 1, 0xFFFFFF)
-	g.rect(bx-10, by-11, bx+10, by+10, 0x5A3418)
-	g.rect(bx-9, by-10, bx+9, by+9, 0xFFF8E8)
-	g.rect(bx-9, by+6, bx+9, by+9, 0xD8C8A8)
-	g.text(bx-5, by-9, key, 2, 0x5A3418)
+	sc := 2
+	if len(key) > 1 { // SPACE, NUM9, F13: smaller letters on a wider cap
+		sc = 1
+	}
+	hw := max(9, (textW(key, sc)+7)/2)
+	g.rect(bx-hw-1, by-11, bx+hw+1, by+10, 0x5A3418)
+	g.rect(bx-hw, by-10, bx+hw, by+9, 0xFFF8E8)
+	g.rect(bx-hw, by+6, bx+hw, by+9, 0xD8C8A8)
+	if sc == 2 {
+		g.text(bx-5, by-9, key, 2, 0x5A3418)
+	} else {
+		g.text(bx-textW(key, 1)/2, by-5, key, 1, 0x5A3418)
+	}
 	g.rect(bx-3, by+10, bx+3, by+12, 0x5A3418)
 	g.rect(bx-1, by+12, bx+1, by+14, 0x5A3418)
 }
 
-func (g *Game) useKey(i int) string {
-	if g.NPlayers == 2 && i == 1 {
-		return "K"
-	}
-	return "E"
-}
+func (g *Game) useKey(i int) string { return g.keyOf(i, AUse) }
 
 // prompt floats a key cap over whatever a farmer on foot can use.
 func (g *Game) prompt(i int, cm cam) {
@@ -202,7 +316,7 @@ func (g *Game) prompt(i int, cm cam) {
 		lift = 4
 	}
 	bob := int(math.Round(math.Sin(g.clock*5) * 2))
-	g.keyCap(int(cm.sx(x)), int(cm.sy(y)-lift*cm.z)-14+bob, g.useKey(i), [4]string{"", "GET IN", "SLEEP", "SHOP"}[kind])
+	g.keyCap(int(cm.sx(x)), int(cm.sy(y)-lift*cm.z)-14+bob, g.useKey(i), [5]string{"", "GET IN", "SLEEP", "SHOP", "HOSE"}[kind])
 }
 
 // hint is only shown for the first minute of the first day.
@@ -211,42 +325,51 @@ func (g *Game) hint(i int) string {
 	if g.Day > 1 || g.hintT > 45 || p.veh < 0 {
 		return ""
 	}
-	use, act := g.useKey(i), "SPACE"
-	if use == "K" {
-		act = "L"
-	}
+	use, act := g.useKey(i), g.keyOf(i, AReap)
 	if g.veh[p.veh].kind == VTruck {
-		return "DRIVE OVER BALES, UNLOAD AT THE BARN"
+		return "DRIVE OVER BALES   " + g.keyOf(i, ABoost) + " - BOOST"
 	}
 	return act + " - REAPER   " + use + " - EXIT"
 }
 
-func (g *Game) hud() {
+func (g *Game) hud(scr int, slots []slot) {
+	if g.State == StSettings {
+		g.settingsScreen()
+		return
+	}
 	if g.State == StTitle {
 		g.rectA(0, 0, SW, SH, 0x2A1808, 160)
-		g.textC(52, "COMBINE-BALER", 5, 0xFFE06A)
-		opts := [2]string{"1 PLAYER", "2 PLAYERS - SPLIT SCREEN"}
+		g.textC(44, "COMBINE-BALER", 5, 0xFFE06A)
+		opts := [4]string{"1 PLAYER", "2 PLAYERS", "3 PLAYERS", "SETTINGS"}
 		for i, o := range opts {
 			c := uint32(0xD8C8A8)
 			if i == g.menuSel {
 				c = 0xFFE06A
 				o = "- " + o + " -"
 			}
-			g.textC(124+i*22, o, 2, c)
+			g.textC(104+i*20, o, 2, c)
 		}
-		y := 186
-		if g.menuSel == 0 {
-			g.textC(y, "WASD OR ARROWS   DRIVE AND WALK", 1, 0xFFFFFF)
-			g.textC(y+12, "SPACE   LOWER OR RAISE THE REAPER", 1, 0xFFFFFF)
-			g.textC(y+24, "E   USE: MACHINES, BARN DOOR, VENDING MACHINE", 1, 0xFFFFFF)
-		} else {
-			g.textC(y, "PLAYER 1   WASD   SPACE REAPER   E USE", 1, 0xFFFFFF)
-			g.textC(y+12, "PLAYER 2   ARROWS   L REAPER   K USE", 1, 0xFFFFFF)
+		y := 194
+		km := &g.Set.Keys
+		line := func(p int) string {
+			return fmt.Sprintf("PLAYER %d   %s   %s REAPER   %s USE   %s BOOST   %s HORN", p+1, moveKeys(km[p]),
+				keyName(km[p][AReap]), keyName(km[p][AUse]), keyName(km[p][ABoost]), keyName(km[p][AHorn]))
+		}
+		switch g.menuSel {
+		case 0:
+			g.textC(y, line(0), 1, 0xFFFFFF)
+			g.textC(y+12, "THE SECOND SET OF KEYS WORKS TOO", 1, 0xFFF4D6)
+		case 1, 2:
+			for p := 0; p <= g.menuSel; p++ {
+				g.textC(y+p*12, line(p), 1, 0xFFFFFF)
+			}
+		default:
+			g.textC(y, "KEYS, TREE COLLISIONS, MUSIC, ONE WINDOW PER PLAYER", 1, 0xFFFFFF)
 		}
 		g.textC(y+44, "HAUL BALES TO THE BARN - THEY SELL AT SUNDOWN - SLEEP IN THE BARN", 1, 0xFFF4D6)
 		g.textC(y+58, "M  WHOLE FARM   P  SAVE PICTURE   F2  MUSIC   ESC  PAUSE", 1, 0xFFF4D6)
 		if int(g.clock*2)%2 == 0 {
-			g.textC(294, "UP / DOWN TO CHOOSE - ENTER TO START", 2, 0xFFE06A)
+			g.textC(300, "UP / DOWN TO CHOOSE - ENTER TO START", 2, 0xFFE06A)
 		}
 		return
 	}
@@ -275,7 +398,7 @@ func (g *Game) hud() {
 	g.art(bx-1, 8, 1, artStalk, true)
 	g.rect(bx-1, top-1, bx+8, bot+1, 0x5A3418)
 	g.rect(bx, top, bx+7, bot, 0x8A5A34)
-	left := 1 - float64(g.Stubble)/float64(g.WheatTotal)
+	left := 1 - float64(g.Stubble+g.Flat)/float64(g.WheatTotal)
 	fy := bot - int(math.Ceil(float64(bot-top)*left))
 	g.rect(bx, fy, bx+7, bot, 0xF4B82E)
 	g.rect(bx, fy, bx+2, bot, 0xFFDC62)
@@ -305,49 +428,135 @@ func (g *Game) hud() {
 		g.textO(cx, y-10-int((4-g.cashFlash)*4), fmt.Sprintf("+%d", g.cashN), 2, 0xFFD23E)
 	}
 
-	for i := range g.pl {
+	for _, sl := range slots {
+		i, r := sl.pl, sl.r
 		p := &g.pl[i]
-		vx, vw := g.view(i)
-		mid := vx + vw/2
+		mid := r.x + r.w/2
+		g.clip0, g.clip1, g.clipY0, g.clipY1 = r.x, r.x+r.w, r.y, r.y+r.h
 		if p.tired > 0.03 { // sleepiness
-			g.textO(mid-24, 8, "Z", 1, 0xDDE6FF)
-			g.rect(mid-15, 8, mid+17, 15, 0x5A3418)
-			g.rect(mid-14, 9, mid+16, 14, 0x2A3566)
-			g.rect(mid-14, 9, mid-14+int(30*p.tired), 14, 0xDDE6FF)
+			g.textO(mid-24, r.y+8, "Z", 1, 0xDDE6FF)
+			g.rect(mid-15, r.y+8, mid+17, r.y+15, 0x5A3418)
+			g.rect(mid-14, r.y+9, mid+16, r.y+14, 0x2A3566)
+			g.rect(mid-14, r.y+9, mid-14+int(30*p.tired), r.y+14, 0xDDE6FF)
 		}
-		if g.State != StPlay {
-			continue
+		if g.State == StPlay {
+			g.status(i, mid, r.y+20)
+			if p.shop {
+				g.shopPanel(i, r)
+			}
+			if h := g.hint(i); h != "" {
+				g.textO(r.x+9, r.y+r.h-42, h, 1, 0xFFFFFF)
+			}
 		}
-		if p.shop {
-			g.shopPanel(i, mid)
-		}
-		if h := g.hint(i); h != "" {
-			g.textO(vx+9, SH-42, h, 1, 0xFFFFFF)
-		}
+		g.clip0, g.clip1, g.clipY0, g.clipY1 = 0, SW, 0, SH
 	}
 	if g.toastT > 0 {
 		g.textC(SH-58, g.toast, 1, 0xFFFFFF)
 	}
 
+	if scr > 0 { // the second window only mirrors what the first one says
+		switch g.State {
+		case StPause:
+			g.rectA(0, 0, SW, SH, 0x2A1808, 130)
+			g.textC(150, "PAUSED", 4, 0xFFE06A)
+		case StSummary:
+			g.rectA(0, 0, SW, SH, 0x2A1808, 150)
+			g.textC(150, "GOOD MORNING", 4, 0xFFE06A)
+		}
+		return
+	}
 	if g.State == StPause {
 		g.rectA(0, 0, SW, SH, 0x2A1808, 130)
-		g.textC(110, "PAUSED", 4, 0xFFE06A)
-		g.textC(160, "ESC   BACK TO THE FIELD", 1, 0xFFFFFF)
-		g.textC(174, "N     GO TO BED NOW", 1, 0xFFFFFF)
-		g.textC(188, "M     MAIN MENU (STARTS A NEW FARM)", 1, 0xFFFFFF)
-		g.textC(202, "F2    MUSIC ON / OFF", 1, 0xFFFFFF)
-		g.textC(216, "Q     QUIT", 1, 0xFFFFFF)
+		g.textC(104, "PAUSED", 4, 0xFFE06A)
+		g.textC(154, "ESC   BACK TO THE FIELD", 1, 0xFFFFFF)
+		g.textC(168, "N     GO TO BED NOW", 1, 0xFFFFFF)
+		g.textC(182, "S     SETTINGS", 1, 0xFFFFFF)
+		g.textC(196, "M     MAIN MENU (STARTS A NEW FARM)", 1, 0xFFFFFF)
+		g.textC(210, "F2    MUSIC ON / OFF", 1, 0xFFFFFF)
+		g.textC(224, "Q     QUIT", 1, 0xFFFFFF)
 	}
 	if g.State == StSummary {
 		g.summary()
 	}
 }
 
-// shopPanel is the vending machine: four goods, a price in coins each.
-func (g *Game) shopPanel(i, mid int) {
+// moveKeys names a player's four movement keys briefly: WASD, ARROWS,
+// NUMPAD 8456.
+func moveKeys(km Keymap) string {
+	k := [4]uint8{km[AUp], km[ALeft], km[ADown], km[ARight]}
+	if k == [4]uint8{KUp, KLeft, KDown, KRight} {
+		return "ARROWS"
+	}
+	short, num := "", "NUMPAD "
+	for _, vk := range k {
+		n := keyName(vk)
+		if len(n) == 1 {
+			short += n
+		} else {
+			short = "-"
+		}
+		if vk >= 0x60 && vk <= 0x69 {
+			num += string(rune('0' + vk - 0x60))
+		} else {
+			num = "-"
+		}
+	}
+	switch {
+	case len(short) == 4:
+		return short
+	case len(num) == 11:
+		return num
+	}
+	return keyName(k[0]) + " " + keyName(k[1]) + " " + keyName(k[2]) + " " + keyName(k[3])
+}
+
+// status is a player's little row of icons at the top of their view: mud
+// on their machine, the truck boost, today's food.
+func (g *Game) status(i, mid, y int) {
+	p := &g.pl[i]
+	var row []func(x int) int
+	if p.veh >= 0 {
+		v := &g.veh[p.veh]
+		row = append(row, func(x int) int {
+			g.mudClock(x+5, y+5, 5, v.mud)
+			return 13
+		})
+		if v.kind == VTruck {
+			row = append(row, func(x int) int {
+				g.rect(x-1, y-1, x+11, y+11, 0x5A3418)
+				g.rect(x, y, x+10, y+10, 0x2A3566)
+				ready := 1 - math.Max(0, v.boostCD)/BoostCD
+				g.rect(x, y+10-int(10*ready), x+10, y+10, 0x3A7BD5)
+				if v.boostCD <= 0 && v.mud < 1 {
+					g.art(x+1, y+1, 1, artBoost, false)
+				}
+				return 14
+			})
+		}
+	}
+	if p.fed {
+		row = append(row, func(x int) int { g.art(x, y+1, 1, artBelly, true); return 12 })
+	}
+	if p.bun {
+		row = append(row, func(x int) int { g.art(x, y+1, 1, artBun, true); return 12 })
+	}
+	w := 0
+	for range row {
+		w += 13
+	}
+	x := mid - w/2
+	for _, f := range row {
+		x += f(x)
+	}
+}
+
+// shopPanel is the vending machine. Four goods show at a time; the row
+// slides along as the selection moves.
+func (g *Game) shopPanel(i int, r rect) {
 	p := &g.pl[i]
 	w, h := 140, 78
-	px, py := mid-w/2, SH/2+24
+	px := r.x + r.w/2 - w/2
+	py := min(r.y+r.h/2+24, r.y+r.h-h-6)
 	if p.shake > 0 {
 		px += int(math.Sin(p.shake*60) * 3)
 	}
@@ -357,15 +566,31 @@ func (g *Game) shopPanel(i, mid int) {
 	g.art(px+5, py+2, 1, artCoin, false)
 	g.text(px+18, py+3, fmt.Sprint(g.Coins), 1, 0xFFFFFF)
 	g.text(px+w-48, py+3, "< "+g.useKey(i)+" >", 1, 0xFFFFFF)
-	for k, it := range items {
-		sx, sy := px+6+k*33, py+17
+	first := max(0, min(p.shopSel-1, NItems-4))
+	if first > 0 {
+		g.text(px-1, py+36, "<", 1, 0x1C6B55)
+	}
+	if first+4 < NItems {
+		g.text(px+w-4, py+36, ">", 1, 0x1C6B55)
+	}
+	for k := first; k < first+4; k++ {
+		sx, sy := px+6+(k-first)*33, py+17
 		if k == p.shopSel {
 			g.rect(sx-2, sy-2, sx+30, sy+44, 0xFFD23E)
 			g.rect(sx, sy, sx+28, sy+42, 0xFFF3B0)
 			sy -= int(math.Round(math.Abs(math.Sin(g.clock*5)) * 2))
 		}
 		g.art(sx+2, sy+2, 2, artItem[k], false)
-		if k == ItemLamps && g.Lamps { // already fitted: a green tick
+		if k == ItemEngine { // level pips
+			for l := 0; l < EngineMax; l++ {
+				c := uint32(0xD8C8A8)
+				if l < g.Engine {
+					c = 0x2FA07E
+				}
+				g.rect(sx+5+l*7, sy+26, sx+10+l*7, sy+28, c)
+			}
+		}
+		if g.soldOut(i, k) { // already have it: a green tick
 			for t := 0; t < 4; t++ {
 				g.rect(sx+8+t, sy+32+t, sx+10+t, sy+34+t, 0x2FA07E)
 			}
@@ -376,12 +601,12 @@ func (g *Game) shopPanel(i, mid int) {
 		}
 		g.art(sx+3, sy+30, 1, artCoin, false)
 		c := uint32(0x5A3418)
-		if g.Coins < it.price {
+		if g.Coins < g.price(k) {
 			c = 0xC8402A
 		}
-		g.text(sx+15, sy+31, fmt.Sprint(it.price), 1, c)
+		g.text(sx+15, sy+31, fmt.Sprint(g.price(k)), 1, c)
 	}
-	name := items[p.shopSel].name
+	name := g.itemName(p.shopSel)
 	g.text(px+(w-textW(name, 1))/2, py+h-12, name, 1, 0x5A3418)
 }
 

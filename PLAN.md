@@ -1,5 +1,8 @@
 # Gameplay improvements: plan
 
+**Status 2026-11-21: all eight milestones built, tested headless; waiting for
+the designer to play the exe.** See `HANDOFF.md` for what is verified.
+
 Branch `gameplay-improvements`, cut from `prototype` at `588a1f0`.
 Written 2026-11-21. Each milestone is one commit that keeps `go test .` green
 and adds a few lines to `game_test.go` that play the feature, with frames in

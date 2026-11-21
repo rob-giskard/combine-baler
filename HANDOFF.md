@@ -1,53 +1,54 @@
 # Combine-Baler: handoff
 
-Written 2026-11-14 at the end of the session that produced commit `282d3c7`.
-Read this first in the next session; `README.md` has controls, build and
-file layout.
+First written 2026-11-14 (commit `282d3c7`); updated 2026-11-21 on the
+`gameplay-improvements` branch, which carries out `PLAN.md`.
+Read this first in the next sess## Where things stand
 
-## Where things stand
-
-- Branch `prototype` holds the whole game. `master` only has the stub README.
-- The GitHub Actions build of `282d3c7` passed; the exe is the
-  `CombineBaler` artifact on that run.
+- Branch `prototype` holds the first playable version; PR #1 brings it to
+  `master`. Branch `gameplay-improvements` adds everything in `PLAN.md`:
+  settings and rebindable keys, smooth/bouncy collisions, lane trees, truck
+  boost with tyre tracks, mud and the hose, seven new shop items, horns,
+  three players, one window per player.
 - Playable loop: reap and draw, haul bales to the pad in front of the barn,
   bales sell at 20:00 for 1 coin each, work at night and get tired, sleep at
-  the barn door, spend coins at the vending machine. One or two players.
+  the barn door, spend coins at the vending machine. One to three players.
 
 ### What has and has not been verified
 
 | Area | State |
 |---|---|
-| Game rules and rendering | Scripted single- and two-player sessions plus 200,000 frames of random input per mode pass (`go test .`). Frames were checked by eye. |
-| Windows window, keyboard, blit (`main_windows.go`) | Compiles and vets. Never launched: the build machine has no Windows or Wine. |
-| Sound output (winmm) | Never played. Only the synth's volume levels were checked numerically. |
-| Music and effects | Nobody has heard them. |
-| Game feel, balance | Untested by a human. |
+| Game rules and rendering | Scripted sessions for 1, 2 and 3 players, one test per new feature, plus 200,000 frames of random input per mode (`go test .`). Frames were checked by eye. |
+| Windows layer (`main_windows.go`) | Compiles and vets. Never launched: the build machine has no Windows or Wine. Keyboard is now polled with `GetAsyncKeyState`; the second window opens on the other monitor if there is one. |
+| Sound output (winmm) | Never played. New sounds (horns, boost, spray) only checked as code. |
+| Game feel, balance | Untested by a human: boost strength, mud rates, crown springiness and shop prices are all first guesses. |
 
 The first thing the next session needs is the designer's report from
-actually running the exe: does it start, does sound play, how does it feel.
+actually running the exe: does it start, does sound play, how does it feel,
+and do both windows take keys at once.
 
-## Three known bugs
+## Known bugs
 
-All three were found by reading the code, not reproduced in play.
-
-1. **A ball can be shoved inside a wall.** When a machine hits a bouncy
-   ball, `rollBalls` in `cosy.go` nudges it forward (`b.x += b.vx * dt * 2`)
-   without the solid check used for normal movement. A ball pushed against
-   the barn can end up inside it and stay there. Fix: route the nudge
-   through the same `solidAt` test.
+1. ~~A ball can be shoved inside a wall.~~ Fixed: the nudge goes through
+   `solidAt`.
 2. **Removing a bale erases ground art under it.** `bakeBale(b, false)` in
    `world.go` sets the object layer to empty for the bale's cells. Ground
-   shadows and the pad's corner posts live in that same layer, so a bale
-   picked up on top of them takes them with it. Fix: keep bales in their own
-   layer, or restore what was there.
-3. **Saved pictures go to the working directory, not next to the exe.**
-   `SavePicture` in `hud.go` creates the file with a bare name. Started from
-   a shortcut or another folder, the picture lands somewhere unexpected or
-   fails to save. Fix: resolve the folder with `os.Executable()`.
+   shadows and the pad's corner posts live in that same layer. Fix: keep
+   bales in their own layer, or restore what was there.
+3. ~~Saved pictures go to the working directory.~~ Fixed: pictures, the
+   settings file and the crash report go next to the exe (`fileDir`).
 
 Smaller loose ends: more than 72 bales on the pad are counted and sold but
-not drawn; `StoredToday` in `game.go` is written and never read; Alt or F10
-may freeze input until pressed again (standard Win32 menu behaviour, not
+not drawn; `StoredToday` in `game.go` is written and never read.
+
+## Tuning knobs added on this branch
+
+Top of `machines.go`: hose length, boost time, dash time and cooldown,
+engine step, big bed capacity, mud rates (`MudCombine`, `MudTruck`), wash
+time, spray range. Shop prices: `items` and `enginePrice` in `cosy.go`.
+Crown springiness: `treeSprings` in `trees.go` (the `34` and radius terms).
+Tree layout: `plantTrees` in `trees.go`.
+
+d again (standard Win32 menu behaviour, not
 checked).
 
 ## Three possible improvements

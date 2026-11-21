@@ -12,10 +12,21 @@ import (
 
 const dt = 1.0 / 60
 
+func TestMain(m *testing.M) {
+	os.MkdirAll("out", 0755)
+	fileDir = "out/" // pictures and settings go here, not next to the test binary
+	os.Remove(fileDir + settingsFile)
+	os.Exit(m.Run())
+}
+
 func dump(t *testing.T, g *Game, name string) {
 	g.Render()
+	dumpFB(t, g.fb, name)
+}
+
+func dumpFB(t *testing.T, fb []uint32, name string) {
 	img := image.NewRGBA(image.Rect(0, 0, SW, SH))
-	for i, c := range g.fb {
+	for i, c := range fb {
 		img.SetRGBA(i%SW, i/SW, color.RGBA{uint8(c >> 16), uint8(c >> 8), uint8(c), 255})
 	}
 	os.MkdirAll("out", 0755)
@@ -48,7 +59,7 @@ func check(g *Game) {
 		if g.solidAt(v.x, v.y) {
 			panic("vehicle inside something solid")
 		}
-		if v.load < 0 || v.load > TruckCap {
+		if v.load < 0 || v.load > g.truckCap() {
 			panic("truck load out of range")
 		}
 		loads += v.load
@@ -86,7 +97,7 @@ func tap(g *Game, key int) {
 
 type pad struct{ up, down, left, right, act, use int }
 
-var pads = [2]pad{{KW, KS, KA, KD, KSpace, KE}, {KUp, KDown, KLeft, KRight, KL, KK}}
+var pads = [3]pad{{KW, KS, KA, KD, KSpace, KE}, {KUp, KDown, KLeft, KRight, KL, KK}, {KNum8, KNum5, KNum4, KNum6, KNum7, KNum9}}
 
 // driveTo steers player pi's vehicle towards a point; stops when done() or close.
 func driveTo(g *Game, pi int, tx, ty float64, done func() bool) bool {
@@ -271,10 +282,10 @@ func TestSinglePlayer(t *testing.T) {
 	}
 	tap(g, KP)
 	dump(t, g, "10_summary")
-	if _, err := os.Stat("combine_baler_day1_1.png"); err != nil {
+	if _, err := os.Stat("out/combine_baler_day1_1.png"); err != nil {
 		t.Fatal("picture not saved")
 	}
-	os.Rename("combine_baler_day1_1.png", "out/11_saved_picture.png")
+	os.Rename("out/combine_baler_day1_1.png", "out/11_saved_picture.png")
 
 	total, stub := g.CutTotal, g.Stubble
 	tap(g, KEnter)
@@ -492,9 +503,9 @@ func TestTwoPlayers(t *testing.T) {
 
 // random key mashing in both modes: check() must hold on every frame.
 func TestFuzz(t *testing.T) {
-	for mode := 0; mode < 2; mode++ {
+	for mode := 0; mode < 3; mode++ {
 		g := NewGame()
-		if mode == 1 {
+		for m := 0; m < mode; m++ {
 			tap(g, KDown)
 		}
 		tap(g, KEnter)
@@ -507,11 +518,11 @@ func TestFuzz(t *testing.T) {
 			seed = seed*1664525 + 1013904223
 			return (seed >> 10) % n
 		}
-		hold := []int{KUp, KDown, KLeft, KRight, KW, KA, KS, KD}
-		rare := []int{KSpace, KL, KE, KK, KSpace, KL, KM, KEsc, KEnter, KN, KR, KF2}
+		hold := []int{KUp, KDown, KLeft, KRight, KW, KA, KS, KD, KNum8, KNum4, KNum6, KSpace}
+		rare := []int{KSpace, KL, KE, KK, KSpace, KL, KM, KEsc, KEnter, KN, KR, KF2, KQ, KO, KI, KNum1, KNum3, KNum7, KNum9}
 		for i := 0; i < 200000; i++ {
 			if rnd(25) == 0 {
-				key := hold[rnd(8)]
+				key := hold[rnd(uint32(len(hold)))]
 				k[key] = !k[key] || rnd(3) == 0 && (key == KUp || key == KW)
 			}
 			for _, r := range rare {
@@ -522,6 +533,15 @@ func TestFuzz(t *testing.T) {
 			}
 			if g.State == StPause {
 				k[KM] = false // do not wipe the farm; that path is tested elsewhere
+				k[KS] = false // nor wander into the settings
+				k[KQ] = false
+			}
+			if i == 60000 { // rich farmers: try the upgrades too
+				g.Coins += 200
+				g.Engine, g.BigBed, g.WideReap = EngineMax, true, true
+			}
+			if i == 120000 {
+				g.Set.Smooth = !g.Set.Smooth
 			}
 			step(g, &k)
 			g.Quit = false
@@ -530,7 +550,12 @@ func TestFuzz(t *testing.T) {
 				tap(g, KEnter)
 			}
 			if i%1499 == 0 {
-				g.Render()
+				for sc := 0; sc < g.Screens(); sc++ {
+					g.RenderScreen(sc)
+				}
+			}
+			if i == 100000 && mode > 0 {
+				g.Set.Windows = 2
 			}
 		}
 		t.Logf("mode %d: day %d, %.1f t, %d bales made, %d stored", mode+1, g.Day, g.Tonnes(g.CutTotal), g.BaleCount, g.Stored)

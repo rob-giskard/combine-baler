@@ -3,7 +3,10 @@ package main
 // The cosy layer: night and tiredness, selling bales at sundown, sleeping
 // in the barn, the vending machine and the bouncy balls.
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 const (
 	NightLen  = DayLen * 10 / 14 // 20:00 - 06:00
@@ -21,6 +24,7 @@ const (
 	UseVehicle
 	UseDoor
 	UseShop
+	UseHose
 )
 
 const (
@@ -28,6 +32,13 @@ const (
 	ItemFizzy
 	ItemBall
 	ItemLamps
+	ItemEgg
+	ItemBun
+	ItemKite
+	ItemEngine
+	ItemBed
+	ItemReaper
+	NItems
 )
 
 type Item struct {
@@ -35,7 +46,42 @@ type Item struct {
 	price int
 }
 
-var items = [4]Item{{"COFFEE", 2}, {"FIZZY WATER", 1}, {"BOUNCY BALL", 4}, {"HEADLAMPS", 12}}
+var items = [NItems]Item{{"COFFEE", 2}, {"FIZZY WATER", 1}, {"BOUNCY BALL", 4}, {"HEADLAMPS", 12},
+	{"EGG SANDWICH", 3}, {"CINNAMON BUN", 3}, {"KITE", 8},
+	{"FASTER ENGINES", 10}, {"BIGGER TRUCK BED", 15}, {"WIDE REAPER", 20}}
+
+var enginePrice = [EngineMax]int{10, 20, 35}
+
+func (g *Game) price(k int) int {
+	if k == ItemEngine {
+		return enginePrice[min(g.Engine, EngineMax-1)]
+	}
+	return items[k].price
+}
+
+func (g *Game) itemName(k int) string {
+	if k == ItemEngine && g.Engine < EngineMax {
+		return fmt.Sprintf("ENGINES LEVEL %d", g.Engine+1)
+	}
+	return items[k].name
+}
+
+// soldOut: upgrades already fitted, a kite already flying.
+func (g *Game) soldOut(i, k int) bool {
+	switch k {
+	case ItemLamps:
+		return g.Lamps
+	case ItemEngine:
+		return g.Engine >= EngineMax
+	case ItemBed:
+		return g.BigBed
+	case ItemReaper:
+		return g.WideReap
+	case ItemKite:
+		return g.pl[i].kite
+	}
+	return false
+}
 
 type Ball struct{ x, y, vx, vy, z, vz float64 }
 
@@ -59,7 +105,10 @@ func (g *Game) nearThing(p *Player) (kind, idx int, x, y float64) {
 		kind, x, y, best = UseDoor, doorX, doorY-6, d
 	}
 	if d := math.Hypot(shopX-p.x, shopY-p.y); d < 9 && d < best {
-		kind, x, y = UseShop, shopX, shopY-12
+		kind, x, y, best = UseShop, shopX, shopY-12, d
+	}
+	if d := math.Hypot(tapX-p.x, tapY-p.y); d < 9 && d < best && g.hoseFree() {
+		kind, x, y = UseHose, tapX, tapY-14
 	}
 	return
 }
@@ -76,6 +125,9 @@ func (g *Game) interact(i int) {
 	case UseShop:
 		p.shop = true
 		g.Snd.Play(SMenu)
+	case UseHose:
+		p.hose, p.fx, p.fy = true, 0, 1
+		g.Snd.Play(SDoor)
 	}
 }
 
@@ -98,20 +150,18 @@ func (g *Game) shopInput(i int, in, last Input) {
 
 func (g *Game) buy(i int) {
 	p := &g.pl[i]
-	it := items[p.shopSel]
-	if g.Coins < it.price || (p.shopSel == ItemLamps && g.Lamps) || (p.shopSel == ItemBall && len(g.balls) >= MaxBalls) {
+	k := p.shopSel
+	price := g.price(k)
+	if g.Coins < price || g.soldOut(i, k) || (k == ItemBall && len(g.balls) >= MaxBalls) {
 		p.shake = 0.3
 		g.Snd.Play(SNope)
 		return
 	}
-	g.Coins -= it.price
-	switch p.shopSel {
+	g.Coins -= price
+	switch k {
 	case ItemCoffee: // only matters to a tired farmer
 		p.tired = 0
-		for k := 0; k < 6; k++ {
-			g.parts = append(g.parts, Particle{x: p.x + (g.rnd()-0.5)*3, y: p.y - 5, vx: (g.rnd() - 0.5) * 2,
-				vy: -5 - g.rnd()*3, life: 1 + g.rnd(), size: 1.2, c: 0xF4EEE6})
-		}
+		g.steam(p)
 		g.Snd.Play(SSip)
 	case ItemFizzy:
 		p.fizz = 25
@@ -123,6 +173,34 @@ func (g *Game) buy(i int) {
 	case ItemLamps:
 		g.Lamps = true
 		g.Snd.Play(SSelect)
+	case ItemEgg: // half the tiredness now, and it builds at half speed today
+		p.tired *= 0.5
+		p.fed = true
+		g.Snd.Play(SSip)
+	case ItemBun:
+		p.bun = true
+		g.steam(p)
+		g.Snd.Play(SSip)
+	case ItemKite:
+		p.kite = true
+		p.kiteX, p.kiteY = p.x, p.y
+		g.Snd.Play(SSelect)
+	case ItemEngine:
+		g.Engine++
+		g.Snd.Play(SSelect)
+	case ItemBed:
+		g.BigBed = true
+		g.Snd.Play(SSelect)
+	case ItemReaper:
+		g.WideReap = true
+		g.Snd.Play(SSelect)
+	}
+}
+
+func (g *Game) steam(p *Player) {
+	for k := 0; k < 6; k++ {
+		g.parts = append(g.parts, Particle{x: p.x + (g.rnd()-0.5)*3, y: p.y - 5, vx: (g.rnd() - 0.5) * 2,
+			vy: -5 - g.rnd()*3, life: 1 + g.rnd(), size: 1.2, c: 0xF4EEE6})
 	}
 }
 
@@ -146,7 +224,11 @@ func (g *Game) cosy(dt float64) {
 		p := &g.pl[i]
 		x, y := g.pos(p)
 		if g.Night() {
-			p.tired = math.Min(1, p.tired+dt/160)
+			rate := dt / 160
+			if p.fed {
+				rate /= 2
+			}
+			p.tired = math.Min(1, p.tired+rate)
 		}
 		if p.shake > 0 {
 			p.shake -= dt
@@ -207,6 +289,9 @@ func (g *Game) newDay(slept bool) {
 	g.T = 0
 	g.CutToday, g.Cashed = 0, 0
 	g.mapView = false
+	for i := range g.pl { // breakfast is a new day
+		g.pl[i].fed, g.pl[i].bun = false, false
+	}
 	if !slept {
 		return
 	}
@@ -218,7 +303,10 @@ func (g *Game) newDay(slept bool) {
 			p.veh = -1
 		}
 		p.x, p.y = doorX-4+8*float64(i), doorY+1
-		p.tired, p.shop, p.faceL = 0, false, false
+		if i == 2 {
+			p.x, p.y = doorX, doorY+5
+		}
+		p.tired, p.shop, p.faceL, p.hose = 0, false, false, false
 		p.zoom = g.zoomTarget(i)
 		g.updateCamera(i)
 	}
@@ -244,8 +332,9 @@ func (g *Game) rollBalls(dt float64) {
 			if d < vehRadius[v.kind]+1.5 && math.Abs(v.speed) > 3 && b.z < 4 {
 				sp := math.Abs(v.speed) + 10
 				b.vx, b.vy, b.vz = (b.x-v.x)/(d+0.01)*sp, (b.y-v.y)/(d+0.01)*sp, 15
-				b.x += b.vx * dt * 2
-				b.y += b.vy * dt * 2
+				if nx, ny := b.x+b.vx*dt*2, b.y+b.vy*dt*2; !g.solidAt(nx, ny) {
+					b.x, b.y = nx, ny
+				}
 				g.Snd.Play(SBoing)
 			}
 		}
@@ -337,8 +426,8 @@ func (g *Game) ambient3() (r, gg, b float64) {
 
 func (g *Game) addLight(cm cam, wx, wy, radius, strength float64) {
 	cx, cy, r := cm.sx(wx), cm.sy(wy), radius*cm.z
-	for py := max(int(cy-r), 0); py <= min(int(cy+r), SH-1); py++ {
-		for px := max(int(cx-r), cm.vx); px <= min(int(cx+r), cm.vx+cm.vw-1); px++ {
+	for py := max(int(cy-r), cm.r.y); py <= min(int(cy+r), cm.r.y+cm.r.h-1); py++ {
+		for px := max(int(cx-r), cm.r.x); px <= min(int(cx+r), cm.r.x+cm.r.w-1); px++ {
 			dx, dy := float64(px)-cx, float64(py)-cy
 			if d := (dx*dx + dy*dy) / (r * r); d < 1 {
 				g.light[py*SW+px] += float32(strength * (1 - d))
@@ -349,7 +438,7 @@ func (g *Game) addLight(cm cam, wx, wy, radius, strength float64) {
 
 // lighting tints the frame for the hour, lets lamps cut through the dark
 // and closes in the edges of a tired farmer's view.
-func (g *Game) lighting() {
+func (g *Game) lighting(slots []slot) {
 	ar, ag, ab := g.ambient3()
 	if ag < 0.995 {
 		dark := ag < 0.9
@@ -358,10 +447,8 @@ func (g *Game) lighting() {
 				g.light = make([]float32, SW*SH)
 			}
 			clear(g.light)
-			for i := range g.pl {
-				p := &g.pl[i]
-				vx, vw := g.view(i)
-				cm := cam{p.camX, p.camY, p.zoom, vx, vw}
+			for _, sl := range slots {
+				cm := g.camOf(sl.pl, sl.r)
 				for j := range g.veh {
 					v := &g.veh[j]
 					if v.driver < 0 {
@@ -382,6 +469,7 @@ func (g *Game) lighting() {
 				}
 				g.addLight(cm, doorX, doorY-8, 36, 0.55) // barn
 				g.addLight(cm, shopX, shopY-12, 16, 0.9) // vending machine
+				g.addLight(cm, tapX, tapY-10, 10, 0.5)   // lamp over the tap
 			}
 		}
 		wr, wg, wb := math.Max(ar, 1.0), math.Max(ag, 0.95), math.Max(ab, 0.80)
@@ -396,17 +484,17 @@ func (g *Game) lighting() {
 			g.fb[i] = mul(c, uint32(r*255), uint32(gg*255), uint32(b*255))
 		}
 	}
-	for i := range g.pl {
-		t := g.pl[i].tired
-		if t < 0.03 {
+	for _, sl := range slots {
+		t := g.pl[sl.pl].tired
+		if t < 0.03 || g.State == StTitle {
 			continue
 		}
-		vx, vw := g.view(i)
-		hw := float64(vw) / 2
-		for py := 0; py < SH; py++ {
-			ny := (float64(py) - SH/2) / (SH / 2)
-			for px := vx; px < vx+vw; px++ {
-				nx := (float64(px) - float64(vx) - hw) / hw
+		r := sl.r
+		hw, hh := float64(r.w)/2, float64(r.h)/2
+		for py := r.y; py < r.y+r.h; py++ {
+			ny := (float64(py) - float64(r.y) - hh) / hh
+			for px := r.x; px < r.x+r.w; px++ {
+				nx := (float64(px) - float64(r.x) - hw) / hw
 				if d := nx*nx + ny*ny; d > 0.3 {
 					k := uint32(255 * (1 - math.Min(1, (d-0.3)/1.1)*t*0.85))
 					g.fb[py*SW+px] = mul(g.fb[py*SW+px], k, k, k)

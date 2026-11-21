@@ -60,6 +60,7 @@ func (g *Game) buildWorld() {
 		}
 	}
 	g.bakeFarm()
+	g.plantTrees()
 }
 
 // tuftArc is the rounded top of one clump of wheat, 8 cells wide.
@@ -103,6 +104,14 @@ func (g *Game) recolor(x, y int) {
 			c = 0xDA961C
 		} else if g.tileAt(x, y-1) != TWheat {
 			c = 0xFFE06A
+		}
+	case TFlat: // pressed down: darker, streaked along the tyre track
+		c = mul(wheatTex(x, y), 196, 178, 150)
+		if h%5 == 0 {
+			c = mul(c, 220, 215, 205)
+		}
+		if g.tileAt(x, y-1) == TWheat {
+			c = 0xC07C16
 		}
 	case TStubble:
 		c = 0xA87442
@@ -155,7 +164,7 @@ func (g *Game) oRect(x0, y0, x1, y1 int, c uint32, solid bool) {
 			}
 			g.obj[y*WW+x] = c
 			if solid {
-				g.solid[y*WW+x] = true
+				g.kind[y*WW+x] = CHard
 			}
 		}
 	}
@@ -242,30 +251,7 @@ func (g *Game) bakeFarm() {
 		g.oRect(x0+4, 67, x0+6, 77, white, true)
 		g.oRect(x0+1, 71, x0+9, 73, white, true)
 	}
-	// autumn trees: one by the barn, a little orchard behind it
-	for _, t := range [][2]int{{460, 48}, {290, -40}, {335, -62}, {392, -48}, {455, -66}, {512, -38}, {268, 60}, {530, 70}} {
-		x, y := t[0], t[1]
-		g.shade(x-8, y+14, x+14, y+20)
-		g.oRect(x-2, y+10, x+3, y+20, 0x7A4A2A, true)
-		g.oDisc(x, y, 13, 0xE8581C, true)
-		g.oDisc(x-4, y-4, 8, 0xF47A2E, true)
-		g.oDisc(x-7, y-7, 3, 0xFF9A48, true)
-		g.oDisc(x+7, y+6, 5, 0xC8421A, true)
-	}
-	// crate
-	g.shade(350, 76, 364, 78)
-	g.oRect(350, 62, 364, 76, 0xB5773A, true)
-	g.oRect(352, 64, 362, 74, 0xE0A858, true)
-	for i := 0; i < 10; i++ {
-		g.oRect(352+i, 64+i, 353+i, 65+i, 0xB5773A, true)
-		g.oRect(361-i, 64+i, 362-i, 65+i, 0xB5773A, true)
-	}
-	// terracotta pots
-	for _, p := range [][2]int{{358, 84}, {372, 97}} {
-		g.oDisc(p[0], p[1], 4, 0xC8592A, true)
-		g.oDisc(p[0], p[1], 2, 0x6A2A14, true)
-		g.oRect(p[0]-3, p[1]-4, p[0], p[1]-3, 0xE8804A, true)
-	}
+	g.bakeHoseStation()
 	// coffee vending machine against the barn's right side
 	g.shade(438, 92, 452, 94)
 	g.oRect(438, 68, 450, 92, 0x1C6B55, true)
@@ -288,7 +274,7 @@ func (g *Game) bakeBale(b Bale, on bool) {
 	for dy := 0; dy < 5; dy++ {
 		for dx := 0; dx < 6; dx++ {
 			x, y := b.x+dx, b.y+dy
-			if x < 0 || y < 0 || x >= WW || y >= WH || g.solid[y*WW+x] {
+			if x < 0 || y < 0 || x >= WW || y >= WH || g.kind[y*WW+x] != CNone {
 				continue
 			}
 			if !on {
@@ -316,11 +302,11 @@ func (g *Game) Replant() {
 	old := g.bales
 	g.bales = nil
 	for i := range g.tile {
-		if g.tile[i] == TStubble {
+		if g.tile[i] == TStubble || g.tile[i] == TFlat {
 			g.tile[i] = TWheat
 		}
 	}
-	g.Stubble = 0
+	g.Stubble, g.Flat = 0, 0
 	for i := range g.veh {
 		g.veh[i].baleAcc = 0
 	}
