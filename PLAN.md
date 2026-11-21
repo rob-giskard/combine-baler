@@ -57,16 +57,18 @@ Settings come first because boost, horn and player 3 all need their own keys.
 - **Contact normal:** when a probe hits, sample `solidAt` around the hit
   point to get the wall direction (vehicle-to-vehicle: the line between
   centres).
-- **Smooth (default):** remove only the part of the motion going into the
+- **Scope of the setting (designer's choice):** the Smooth/Bouncy toggle
+  applies only to trees and other map objects. The barn and other machines
+  always use the smooth slide below, never the bounce.
+- **Smooth:** remove only the part of the motion going into the
   wall, keep the sideways part, so the machine slides along trees, the barn
   and other machines, losing about 15% speed. A small push-out frees a
   machine that starts a frame overlapping something, so nothing can wedge.
-- **Bouncy (exaggerated):** bounce off with about 90% of the speed plus an
+- **Bouncy (default for trees and map objects):** bounce off with about 90% of the speed plus an
   extra kick, a short spin, a dust puff and a boing. Vehicles get a knockback
   velocity (`kx, ky`, decays over about half a second) separate from their
-  driving speed. Machines push each other apart, parked ones included.
-  Farmers on foot near a moving machine are pushed outward with a little hop
-  and wobble. Never damage, never a fail state.
+  driving speed. A farmer on foot who walks into a tree bounces off it with
+  a little hop and wobble. Never damage, never a fail state.
 - **More autumn trees, on grass only:** four leaf palettes (orange, red,
   gold, russet) and three sizes, picked per tree by `hash`. About a dozen
   more around the yard and along the grass lanes between fields. No trees
@@ -88,8 +90,12 @@ Settings come first because boost, horn and player 3 all need their own keys.
 - Sound: a short whoosh, plus a deeper engine note while boosted.
 - Boost does not work while clogged with mud (milestone 4), so cleaning
   matters.
-- **Tyre marks:** boosting on a field leaves two dark muddy tyre stripes
-  behind the truck for the length of the dash.
+- **Tyre marks:** boosting across wheat flattens two tyre stripes for the
+  length of the dash. Flattened wheat is a new cell state: it can't be
+  reaped into bales, looks pressed down and darker, and springs back at
+  replanting. (It cuts into drawings, by design.)
+- **Camera:** the view zooms out while boosting and eases back in as the
+  speed-up fades.
 
 ### 4. Mud and the hose station
 
@@ -108,19 +114,24 @@ Settings come first because boost, horn and player 3 all need their own keys.
   - On foot, Use at the tap picks up the hose ("HOSE" key cap). The hose is
     drawn as a line from the tap to the farmer and has a fixed length.
   - The farmer walks around holding it and aims where he faces; the reaper
-    key sprays. Water particles arc out, and a machine they land on loses
+    key sprays. The hose reaches about four truck lengths; walking further
+    drops it and it snaps back to the tap. Water particles arc out, and a machine they land on loses
     mud (about 3 s for a full clean). Cleaned machines sparkle for a moment.
   - Use again (or walking back to the tap) hangs the hose up.
 
 ### 5. Shop: upgrades, food and a fun item
 
-- **Engine upgrades:** several levels, each a permanent top-speed boost for
-  every machine at a rising price. The icon shows the level reached.
+- **Engine upgrades:** several levels (planned: 3), each a permanent
+  top-speed boost for every machine at a rising price. The icon shows the
+  level reached.
+- **Bigger truck bed:** one level, more bales per trip.
+- **Wider reaper:** one level, the combine cuts a wider swath.
 - **Egg sandwich:** about 3 coins. Removes half the current tiredness, and for
   the rest of the day tiredness builds at half speed ("full belly" icon in
   the HUD).
 - **Cinnamon bun:** +10% speed for the rest of the day.
-- **One more fun item** in the spirit of the bouncy ball (to be chosen).
+- **Kite:** the fun item. Once bought, the farmer flies a kite on a string
+  that trails behind him and drifts with the wind, also while driving.
 - With 7+ items the vending panel scrolls: it shows a window of items and
   slides along as you move the selection, so it fits a narrow view.
 
@@ -136,7 +147,8 @@ Settings come first because boost, horn and player 3 all need their own keys.
 
 - `setup(3)`: three combines and three trucks; player 3's machines get a third
   tint (blue). New parking spots in the yard, checked against the new trees.
-- **Screen layout (designer's choice):** two views side by side on top,
+- Two players keep today's side-by-side split.
+- **Screen layout for three (designer's choice):** two views side by side on top,
   one wide view below. Views become rectangles (x, y, w, h) instead of
   full-height strips, so `cam`, `view`, `updateCamera`, `renderView`,
   lighting and the HUD all take a view height too.
@@ -156,6 +168,9 @@ Settings come first because boost, horn and player 3 all need their own keys.
   one player could drive at a time. Keys are read with `GetAsyncKeyState`
   every frame instead of from window messages.
 - Shared screens (title, pause, morning report) show in the first window.
+- Windows are normal resizable windows (the designer has two monitors), not
+  borderless fullscreen. With three players, the first window keeps two
+  views and the second window gets one, or the reverse; set in settings.
 
 ### Extra input devices (mini keyboard with knob)
 
@@ -180,9 +195,20 @@ change Windows' volume, so remapping is better.
    is bound through the settings screen.
 7. Trees on grass only, with soft bouncy crowns overhanging the wheat.
 
-## Still open
+## Decisions made, round 2
 
-See the latest questions to the designer; answers go here.
+1. Fun item: a kite.
+2. Upgrades: engine levels, plus one level each of truck capacity and reaper
+   width.
+3. Boost tyre marks flatten wheat; the camera zooms out while boosting.
+4. Hose: sprays with the reaper key where the farmer faces; reach about four
+   truck lengths; drops back to the tap when stretched too far.
+5. Coins and upgrades stay shared.
+6. Sleeping: anyone at the barn door still ends the day for everyone.
+7. Smooth/Bouncy applies only to trees and map objects, never the barn or
+   other machines; bouncy is the default.
+8. Window per player: normal resizable windows; two monitors.
+9. Two players keep the side-by-side split.
 
 ## Untouched here
 
