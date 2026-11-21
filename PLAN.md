@@ -1,7 +1,8 @@
 # Gameplay improvements: plan
 
 **Status 2026-11-21: all eight milestones built, tested headless; waiting for
-the designer to play the exe.** See `HANDOFF.md` for what is verified.
+the designer to play the exe.** Later the same day the designer dropped the
+mud mechanic (milestone 4): the hose stays as a fun activity only. See `HANDOFF.md` for what is verified.
 
 Branch `gameplay-improvements`, cut from `prototype` at `588a1f0`.
 Written 2026-11-21. Each milestone is one commit that keeps `go test .` green

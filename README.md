@@ -32,10 +32,10 @@ buys, up/down closes.
 - **Truck boost:** a dash, a puff of smoke and a speed-up that fades over
   3.5 seconds; ready again 4 seconds after the last one. The dash presses the wheat flat in two tyre tracks (it grows
   back at replanting).
-- **Mud** builds up as machines work (the clock in the top of your view).
-  Past half full they slow down; full, they are clogged and cannot boost.
-  Wash them at the tap on the barn's left wall: take the hose (use key),
-  aim, hold the reaper key. Walk too far and the hose springs back.
+- **The hose** hangs on the tap at the barn's left wall, just for fun:
+  take it (use key), aim, hold the reaper key to spray. Soaked machines
+  sparkle and the bouncy ball gets pushed along. Walk too far and the hose
+  springs back.
 - **Vending machine:** coffee, fizzy water, egg sandwich (tiredness halved and
   slower for the day), cinnamon bun (+10% speed for the day), bouncy ball,
   kite, headlamps, three levels of faster engines, a bigger truck bed, a
@@ -61,7 +61,7 @@ attached to the run as the `CombineBaler` artifact.
 | `world.go`        | Field grid, wheat/stubble colouring, barn and yard art, bales    |
 | `trees.go`        | Tree planting, canopy, soft bouncy crowns                        |
 | `collide.go`      | Contact normals, sliding, bouncing, unsticking                   |
-| `machines.go`     | Boost and tyre tracks, mud, hose, horns, kite, mud gauge         |
+| `machines.go`     | Boost and tyre tracks, hose, horns, kite                         |
 | `cosy.go`         | Day and night, tiredness, sundown sale, sleep, shop, balls, light |
 | `views.go`        | Screen layouts for 1-3 players and one or two windows            |
 | `settings.go`     | Key bindings, settings file, settings screen                     |
@@ -70,7 +70,7 @@ attached to the run as the `CombineBaler` artifact.
 | `font.go`         | 5x7 bitmap font                                                  |
 | `main_windows.go` | Win32 windows, keyboard polling, blit, winmm audio output        |
 | `game_test.go`    | Scripted play-throughs, random-input runs, audio level check     |
-| `features_test.go`| Trees, collisions, boost, mud and hose, shop, horns, 3 players, settings |
+| `features_test.go`| Trees, collisions, boost, hose, shop, horns, 3 players, settings |
 
 The core renders into a 640x360 software framebuffer and is platform
 independent, so the tests run headless anywhere (`go test .` also dumps

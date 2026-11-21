@@ -510,24 +510,20 @@ func moveKeys(km Keymap) string {
 	return keyName(k[0]) + " " + keyName(k[1]) + " " + keyName(k[2]) + " " + keyName(k[3])
 }
 
-// status is a player's little row of icons at the top of their view: mud
-// on their machine, the truck boost, today's food.
+// status is a player's little row of icons at the top of their view: the
+// truck boost, today's food.
 func (g *Game) status(i, mid, y int) {
 	p := &g.pl[i]
 	var row []func(x int) int
 	if p.veh >= 0 {
 		v := &g.veh[p.veh]
-		row = append(row, func(x int) int {
-			g.mudClock(x+5, y+5, 5, v.mud)
-			return 13
-		})
 		if v.kind == VTruck {
 			row = append(row, func(x int) int {
 				g.rect(x-1, y-1, x+11, y+11, 0x5A3418)
 				g.rect(x, y, x+10, y+10, 0x2A3566)
 				ready := 1 - math.Max(0, v.boostCD)/BoostCD
 				g.rect(x, y+10-int(10*ready), x+10, y+10, 0x3A7BD5)
-				if v.boostCD <= 0 && v.mud < 1 {
+				if v.boostCD <= 0 {
 					g.art(x+1, y+1, 1, artBoost, false)
 				}
 				return 14

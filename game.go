@@ -104,10 +104,8 @@ type Vehicle struct {
 
 	kx, ky, spin    float64 // knockback from bouncy trees
 	boost, boostCD  float64 // seconds of boost left, cooldown left
-	mud             float64 // 0 clean .. 1 clogged
 	sparkle, hornCD float64
-	reapT           float64 // cut wheat in the last moment
-	contact         bool    // touching something last step
+	contact         bool // touching something last step
 	bumpT           float64
 }
 
@@ -497,13 +495,9 @@ func (g *Game) Update(dt float64, keys *[256]bool) {
 		if v.kind == VCombine {
 			if g.work(v, dt) > 0 {
 				reaping = true
-				v.reapT = 0.3
 			}
-			v.reapT -= dt
-			g.muddy(v, dt, v.reapT > 0)
 		} else {
 			g.haul(v, dt)
-			g.muddy(v, dt, false)
 		}
 	}
 	g.Snd.SetState(cOn, cSpd, tOn, tSpd, reaping)
@@ -679,13 +673,9 @@ func (g *Game) drive(vi int, in Input, dt float64) {
 	v.tread += v.speed * dt
 
 	v.exhaustT -= dt
-	clogged := v.mud >= 1
-	if v.exhaustT <= 0 && (in.up || in.down || clogged && v.driver >= 0) {
+	if v.exhaustT <= 0 && (in.up || in.down) {
 		v.exhaustT = 0.09
 		col, size := uint32(0x8A8A90), 1.5
-		if clogged { // coughing dark smoke
-			v.exhaustT, col, size = 0.18, 0x4A4038, 2.2
-		}
 		s, c := math.Sin(v.ang), math.Cos(v.ang)
 		r, f := 2.5, -5.5
 		if v.kind == VTruck {
@@ -922,7 +912,6 @@ func (g *Game) buildSprite(v *Vehicle) (w, h int) {
 		}
 		fill(1, 27, 3, 28, 0xE02A2A)
 		fill(13, 27, 15, 28, 0xE02A2A)
-		g.mudSpeckle(v, sp, w, h)
 		return
 	}
 	pt := combinePaint[v.tint]
@@ -977,30 +966,7 @@ func (g *Game) buildSprite(v *Vehicle) (w, h int) {
 		sp[33*w+u+o] = pt[4]
 	}
 	fill(24+o, 31, 26+o, 33, 0x333338)
-	g.mudSpeckle(v, sp, w, h)
 	return
-}
-
-// mudSpeckle splashes mud over a sprite: more of it as the mud builds, and
-// more low down and towards the back.
-func (g *Game) mudSpeckle(v *Vehicle, sp []uint32, w, h int) {
-	if v.mud < 0.02 {
-		return
-	}
-	for t := 0; t < h; t++ {
-		for u := 0; u < w; u++ {
-			i := t*w + u
-			if sp[i] == 0 {
-				continue
-			}
-			edge := math.Min(1, math.Min(float64(u), float64(w-1-u))/4)
-			weight := 0.35 + 0.45*float64(t)/float64(h) + 0.3*(1-edge)
-			hh := hash(u*7+v.tint*101, t*13+v.kind*57)
-			if float64(hh%1000)/1000 < v.mud*0.55*weight {
-				sp[i] = [3]uint32{0x6A4520, 0x7E5428, 0x58381A}[hh>>12%3]
-			}
-		}
-	}
 }
 
 // view transform for the viewport being drawn
@@ -1293,12 +1259,6 @@ func (g *Game) renderView(i int, r rect) {
 		g.rectA(int(px)-sz/2, int(py)-sz/2, int(px)-sz/2+sz, int(py)-sz/2+sz, pt.c, a)
 	}
 	g.drawKites(cm)
-	for j := range g.veh { // muddy machines carry a little gauge
-		v := &g.veh[j]
-		if v.mud > 0.75 {
-			g.mudClock(int(cm.sx(v.x)), int(cm.sy(v.y-15)), max(3, int(2.2*cm.z)), v.mud)
-		}
-	}
 	g.prompt(i, cm)
 	if cm.z < 0.7 && int(g.clock*3)%2 == 0 { // who is where on the map
 		for j := range g.pl {

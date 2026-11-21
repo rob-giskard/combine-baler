@@ -7,7 +7,7 @@ Read this first in the next sess## Where things stand
 - Branch `prototype` holds the first playable version; PR #1 brings it to
   `master`. Branch `gameplay-improvements` adds everything in `PLAN.md`:
   settings and rebindable keys, smooth/bouncy collisions, lane trees, truck
-  boost with tyre tracks, mud and the hose, seven new shop items, horns,
+  boost with tyre tracks, the hose, seven new shop items, horns,
   three players, one window per player.
 - Playable loop: reap and draw, haul bales to the pad in front of the barn,
   bales sell at 20:00 for 1 coin each, work at night and get tired, sleep at
@@ -20,7 +20,7 @@ Read this first in the next sess## Where things stand
 | Game rules and rendering | Scripted sessions for 1, 2 and 3 players, one test per new feature, plus 200,000 frames of random input per mode (`go test .`). Frames were checked by eye. |
 | Windows layer (`main_windows.go`) | Compiles and vets. Never launched: the build machine has no Windows or Wine. Keyboard is now polled with `GetAsyncKeyState`; the second window opens on the other monitor if there is one. |
 | Sound output (winmm) | Never played. New sounds (horns, boost, spray) only checked as code. |
-| Game feel, balance | Untested by a human: boost strength, mud rates, crown springiness and shop prices are all first guesses. |
+| Game feel, balance | Untested by a human: boost strength, crown springiness and shop prices are all first guesses. |
 
 The first thing the next session needs is the designer's report from
 actually running the exe: does it start, does sound play, how does it feel,
@@ -43,8 +43,7 @@ not drawn; `StoredToday` in `game.go` is written and never read.
 ## Tuning knobs added on this branch
 
 Top of `machines.go`: hose length, boost time, dash time and cooldown,
-engine step, big bed capacity, mud rates (`MudCombine`, `MudTruck`), wash
-time, spray range. Shop prices: `items` and `enginePrice` in `cosy.go`.
+engine step, big bed capacity, spray range. Shop prices: `items` and `enginePrice` in `cosy.go`.
 Crown springiness: `treeSprings` in `trees.go` (the `34` and radius terms).
 Tree layout: `plantTrees` in `trees.go`.
 

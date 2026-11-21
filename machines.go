@@ -1,7 +1,8 @@
 package main
 
 // Machine extras: the truck boost and the tyre tracks it presses into the
-// wheat, mud and the wash hose, horns, and the kite.
+// wheat, the hose (just for fun: a soaked machine sparkles), horns, and the
+// kite.
 
 import "math"
 
@@ -16,9 +17,6 @@ const (
 	EngineStep = 0.12 // top speed per engine level
 	BigBedCap  = 14
 	HornGap    = 0.4
-	MudCombine = 90.0  // seconds of reaping to clog a combine
-	MudTruck   = 150.0 // seconds of driving on the field to clog a truck
-	WashTime   = 3.0   // seconds of spraying to clean a clogged machine
 	SprayRange = 26.0
 )
 
@@ -46,13 +44,8 @@ func (g *Game) truckCap() int {
 	return TruckCap
 }
 
-// mudFactor: no effect below half full, down to 55% top speed when clogged.
-func mudFactor(v *Vehicle) float64 {
-	return 1 - 0.45*math.Max(0, math.Min(1, (v.mud-0.5)/0.5))
-}
-
 func (g *Game) speedMult(v *Vehicle) float64 {
-	m := (1 + EngineStep*float64(g.Engine)) * mudFactor(v)
+	m := 1 + EngineStep*float64(g.Engine)
 	if v.driver >= 0 {
 		p := &g.pl[v.driver]
 		m *= 1 - 0.3*p.tired // sleepy farmers drive gently
@@ -70,10 +63,7 @@ func (g *Game) tryBoost(vi int) {
 	if v.kind != VTruck {
 		return
 	}
-	if v.boostCD > 0 || v.mud >= 1 {
-		if v.mud >= 1 {
-			g.Snd.Play(SNope)
-		}
+	if v.boostCD > 0 {
 		return
 	}
 	v.boost, v.boostCD = BoostTime, BoostCD
@@ -111,20 +101,6 @@ func (g *Game) tracks(v *Vehicle) {
 			}
 		}
 	}
-}
-
-// ---------------------------------------------------------------- mud
-
-// muddy builds mud on a machine working the field.
-func (g *Game) muddy(v *Vehicle, dt float64, reaping bool) {
-	if v.kind == VCombine {
-		if reaping {
-			v.mud += dt / MudCombine
-		}
-	} else if t := g.tileAt(int(v.x), int(v.y)); t == TWheat || t == TStubble || t == TFlat {
-		v.mud += dt * math.Min(1, math.Abs(v.speed)/46) / MudTruck
-	}
-	v.mud = math.Min(1, v.mud)
 }
 
 func (g *Game) hoseFree() bool {
@@ -171,12 +147,10 @@ func (g *Game) spray(i int, dt float64) {
 		if along < 0 || along > SprayRange || across > 6+along*0.4 {
 			continue
 		}
-		was := v.mud
-		v.mud = math.Max(0, v.mud-dt/WashTime)
-		if was > 0 && v.mud == 0 {
-			v.sparkle = 1.2
+		if v.sparkle <= 0 { // freshly soaked: a twinkle
 			g.Snd.Play(SSparkle)
 		}
+		v.sparkle = 0.8
 	}
 	for j := range g.balls { // a good soak also pushes the ball along
 		b := &g.balls[j]
@@ -332,37 +306,4 @@ func (g *Game) drawHoses(cm cam) {
 			g.rect(px, py, px+sz, py+sz, 0x2E8A3A)
 		}
 	}
-}
-
-// ---------------------------------------------------------------- gauge
-
-// mudClock draws the mud gauge: a brown disc filling clockwise from twelve.
-func (g *Game) mudClock(cx, cy, r int, frac float64) {
-	fr := float64(r)
-	for py := cy - r - 1; py <= cy+r+1; py++ {
-		for px := cx - r - 1; px <= cx+r+1; px++ {
-			dx, dy := float64(px-cx)+0.5, float64(py-cy)+0.5
-			d := math.Hypot(dx, dy)
-			switch {
-			case d > fr+1:
-				continue
-			case d > fr:
-				g.rect(px, py, px+1, py+1, 0x3A2410)
-				continue
-			}
-			a := math.Atan2(dx, -dy)
-			if a < 0 {
-				a += 2 * math.Pi
-			}
-			c := uint32(0xE8D8B8)
-			if a <= frac*2*math.Pi {
-				c = 0x8A5A2A
-				if frac >= 1 { // clogged: blinks
-					c = [2]uint32{0x5E3A18, 0xC8402A}[int(g.clock*3)%2]
-				}
-			}
-			g.rect(px, py, px+1, py+1, c)
-		}
-	}
-	g.rect(cx, cy-r+1, cx+1, cy, 0x3A2410) // the hand at twelve
 }

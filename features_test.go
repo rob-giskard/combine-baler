@@ -186,13 +186,6 @@ func TestBoost(t *testing.T) {
 	if g.Flat != 0 || g.tileAt(int(v.x), int(v.y)) == TFlat {
 		t.Fatal("replant should restore pressed wheat")
 	}
-	// clogged trucks cannot boost
-	seat(g, 0, 1)
-	v.mud, v.boostCD = 1, 0
-	tap(g, KQ)
-	if v.boost > 0 {
-		t.Fatal("boosted while clogged")
-	}
 	// the combine has no boost
 	seat(g, 0, 0)
 	tap(g, KQ)
@@ -201,30 +194,19 @@ func TestBoost(t *testing.T) {
 	}
 }
 
-func TestMudAndHose(t *testing.T) {
+func TestHose(t *testing.T) {
 	g := start1(t)
 	c := &g.veh[0]
-	run(g, 3, KW)
-	tap(g, KSpace)
-	run(g, 10, KW)
-	if c.mud < 10/MudCombine*0.8 || c.mud > 10/MudCombine*1.2 {
-		t.Fatalf("mud after 10 s reaping %.3f", c.mud)
+	speed := 0.0
+	run(g, 20, KW, KD) // long hours in the field change nothing
+	for n := 0; n < 60; n++ {
+		run(g, 1.0/60, KW, KD)
+		speed = math.Max(speed, c.speed)
 	}
-	// a clogged combine is slow
-	tap(g, KSpace)
-	c.mud = 1
-	top := 0.0
-	for n := 0; n < 180; n++ {
-		var k [256]bool
-		k[KW] = true
-		step(g, &k)
-		top = math.Max(top, c.speed)
+	if speed < 31.5 {
+		t.Fatalf("combine slowed to %.1f", speed)
 	}
-	if top > 32*0.56 || top < 32*0.5 {
-		t.Fatalf("clogged top speed %.1f", top)
-	}
-	dump(t, g, "35_clogged")
-	// park it by the tap, climb out, take the hose, wash it
+	// park it by the tap, climb out, take the hose, soak it
 	c.x, c.y, c.ang, c.speed = tapX+4, tapY+30, math.Pi, 0
 	tap(g, KE)
 	p := &g.pl[0]
@@ -241,12 +223,11 @@ func TestMudAndHose(t *testing.T) {
 	}
 	walkTo(g, 0, c.x, c.y-17)
 	run(g, 0.05, KS) // face the combine
-	run(g, WashTime*0.5, KSpace)
-	dump(t, g, "37_washing")
-	run(g, WashTime*0.6, KSpace)
-	if c.mud != 0 || c.sparkle <= 0 {
-		t.Fatalf("still muddy %.2f", c.mud)
+	run(g, 1, KSpace)
+	if c.sparkle <= 0 {
+		t.Fatal("a soaked machine should sparkle")
 	}
+	dump(t, g, "37_washing")
 	tap(g, KE) // hang the hose up
 	if p.hose {
 		t.Fatal("hose not hung up")
@@ -257,14 +238,6 @@ func TestMudAndHose(t *testing.T) {
 	run(g, 7, KS)
 	if p.hose {
 		t.Fatal("hose stretched forever")
-	}
-	// trucks get muddy driving the field
-	seat(g, 0, 1)
-	tr := &g.veh[1]
-	tr.x, tr.y, tr.ang = float64(Margin+150), float64(Margin+200), 0
-	run(g, 20, KW, KD)
-	if tr.mud < 0.05 {
-		t.Fatalf("truck mud %.3f", tr.mud)
 	}
 }
 
