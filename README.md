@@ -29,8 +29,8 @@ buys, up/down closes.
   the default BOUNCY setting the crowns are soft springs and the trunks
   bounce you off; SMOOTH lets you slide past and drive under the leaves.
   The barn and other machines always slide.
-- **Truck boost:** a dash, a puff of smoke and a speed-up that fades, every
-  4 seconds. The dash presses the wheat flat in two tyre tracks (it grows
+- **Truck boost:** a dash, a puff of smoke and a speed-up that fades over
+  3.5 seconds; ready again 4 seconds after the last one. The dash presses the wheat flat in two tyre tracks (it grows
   back at replanting).
 - **Mud** builds up as machines work (the clock in the top of your view).
   Past half full they slow down; full, they are clogged and cannot boost.

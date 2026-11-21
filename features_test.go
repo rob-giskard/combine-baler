@@ -161,7 +161,7 @@ func TestBoost(t *testing.T) {
 	if v.boost <= 0 || v.speed < base*1.4 {
 		t.Fatalf("boost: %.1f -> %.1f", base, v.speed)
 	}
-	run(g, 0.7, KW)
+	run(g, DashTime+0.1, KW)
 	if g.Flat < 40 || g.tileAt(int(v.x+4.5), int(v.y+8)) == TStubble {
 		t.Fatalf("flattened %d cells", g.Flat)
 	}
@@ -171,9 +171,9 @@ func TestBoost(t *testing.T) {
 	dump(t, g, "33_boost")
 	flat := g.Flat
 	tap(g, KQ) // still cooling down
-	run(g, 3, KW)
+	run(g, BoostTime-DashTime, KW)
 	if g.Flat != flat || v.boost > 0 {
-		t.Fatal("boost on cooldown fired again")
+		t.Fatalf("boost on cooldown fired again: flat %d->%d boost %.2f cd %.2f", flat, g.Flat, v.boost, v.boostCD)
 	}
 	if v.speed > 46*1.05 {
 		t.Fatalf("speed-up did not fade: %.1f", v.speed)
