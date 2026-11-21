@@ -67,11 +67,16 @@ Settings come first because boost, horn and player 3 all need their own keys.
   driving speed. Machines push each other apart, parked ones included.
   Farmers on foot near a moving machine are pushed outward with a little hop
   and wobble. Never damage, never a fail state.
-- **More autumn trees:** four leaf palettes (orange, red, gold, russet) and
-  three sizes, picked per tree by `hash`. About a dozen more around the yard
-  and along the grass lanes, plus one to three lone trees inside some
-  fields. Wheat under a trunk becomes grass and leaves `WheatTotal`; the
-  crown's shadow darkens the wheat around it.
+- **More autumn trees, on grass only:** four leaf palettes (orange, red,
+  gold, russet) and three sizes, picked per tree by `hash`. About a dozen
+  more around the yard and along the grass lanes between fields. No trees
+  inside fields.
+- **Soft, bouncy crowns (designer's choice):** lane trees are big enough
+  that their crowns hang over the edge of the wheat. The trunk is hard; the
+  crown is a soft spring bumper that a machine can sink into a little
+  before it is pushed back out with a wobble. That makes trimming the wheat
+  under an overhanging crown a small precision challenge. Crowns go
+  see-through over a machine so the driver can see what they are cutting.
 
 ### 3. Truck boost
 
@@ -83,6 +88,8 @@ Settings come first because boost, horn and player 3 all need their own keys.
 - Sound: a short whoosh, plus a deeper engine note while boosted.
 - Boost does not work while clogged with mud (milestone 4), so cleaning
   matters.
+- **Tyre marks:** boosting on a field leaves two dark muddy tyre stripes
+  behind the truck for the length of the dash.
 
 ### 4. Mud and the hose station
 
@@ -97,22 +104,25 @@ Settings come first because boost, horn and player 3 all need their own keys.
   floats small above any machine past 75%. The vehicle sprite gets brown
   speckles that grow with the mud.
 - **Hose station:** a tap and coiled green hose on the barn's left wall,
-  where the crate stood. On foot, press Use at the tap (`UseHose`,
-  "WASH" key cap). The farmer sprays the nearest machine within reach: water
-  particles arc onto it and its mud drains over about 3 s. Cleaned machines
-  sparkle for a moment.
+  where the crate stood.
+  - On foot, Use at the tap picks up the hose ("HOSE" key cap). The hose is
+    drawn as a line from the tap to the farmer and has a fixed length.
+  - The farmer walks around holding it and aims where he faces; the reaper
+    key sprays. Water particles arc out, and a machine they land on loses
+    mud (about 3 s for a full clean). Cleaned machines sparkle for a moment.
+  - Use again (or walking back to the tap) hangs the hose up.
 
-### 5. Shop: two new items
+### 5. Shop: upgrades, food and a fun item
 
-- **Better engines:** permanent +20% top speed for every machine, one-time
-  purchase, about 15 coins. Shows the green tick once bought, like the
-  headlamps.
+- **Engine upgrades:** several levels, each a permanent top-speed boost for
+  every machine at a rising price. The icon shows the level reached.
 - **Egg sandwich:** about 3 coins. Removes half the current tiredness, and for
   the rest of the day tiredness builds at half speed ("full belly" icon in
   the HUD).
-- The vending panel grows from 4 to 6 items (about 210 px wide, still fits a
-  third of the screen in 3-player). Two new 14x14 icons in the `artItem`
-  tables.
+- **Cinnamon bun:** +10% speed for the rest of the day.
+- **One more fun item** in the spirit of the bouncy ball (to be chosen).
+- With 7+ items the vending panel scrolls: it shows a window of items and
+  slides along as you move the selection, so it fits a narrow view.
 
 ### 6. Car horns
 
@@ -126,31 +136,53 @@ Settings come first because boost, horn and player 3 all need their own keys.
 
 - `setup(3)`: three combines and three trucks; player 3's machines get a third
   tint (blue). New parking spots in the yard, checked against the new trees.
-- **Screen layout:** three vertical strips, 212 px wide each, full height.
-  This keeps the camera code as it is (it already works in vertical strips);
-  zoom levels get a third column in `zoomTarget`.
+- **Screen layout (designer's choice):** two views side by side on top,
+  one wide view below. Views become rectangles (x, y, w, h) instead of
+  full-height strips, so `cam`, `view`, `updateCamera`, `renderView`,
+  lighting and the HUD all take a view height too.
 - Generalise every `NPlayers == 2` check to "split when more than one
-  player"; `view(i)` returns strip `i` of `NPlayers`.
-- HUD per strip: bale icons, mud gauge, boost icon, prompts and shop panel
-  laid out for the narrower strip.
+  player".
+- HUD per view: bale icons, mud gauge, boost icon, prompts and shop panel
+  laid out for the half-height views.
+
+### 8. One window per player (spread across monitors)
+
+- Settings option **Views: one window / a window per player.**
+- In window-per-player mode each player's view gets its own Win32 window at
+  the full 640x360 resolution (scaled up), which can be dragged to another
+  monitor and maximised. The game core already renders each view
+  separately, so this is mostly platform work in `main_windows.go`.
+- Keyboard input must not depend on which window has focus, otherwise only
+  one player could drive at a time. Keys are read with `GetAsyncKeyState`
+  every frame instead of from window messages.
+- Shared screens (title, pause, morning report) show in the first window.
+
+### Extra input devices (mini keyboard with knob)
+
+Nothing special to build: any key a device sends can be bound in the
+settings screen by pressing it. Small macro pads usually come with their
+own software that sets what each key and the knob send. Best practice is
+to set them to keys nobody types on, such as F13 to F24, then bind those in
+the game. If the device sends media keys (volume up/down), those also
+change Windows' volume, so remapping is better.
 - Tests: `TestThreePlayers` (scripted) and a 3-player fuzz run.
 
-## Open questions for the designer
+## Decisions made (2026-11-21)
 
-1. **Boost on trucks only, or combines too?** The plan follows the brief
-   (trucks only).
-2. **Hose: farmer sprays on foot, or a drive-through wash?** The plan has the
-   farmer spray it, which is cosier; drive-through is quicker in play.
-3. **Better engines: one-time +20%, or three levels (+10% each, rising
-   price)?**
-4. **Egg sandwich effect:** is "half tiredness now, tiredness builds half as
-   fast the rest of the day" right, or should it do something else?
-5. **3-player layout:** three vertical strips (planned), or two on top and
-   one wide view at the bottom?
-6. **3-player keys:** the numpad (needs Num Lock on), or skip that and go
-   straight to gamepad support for players 2 and 3?
-7. **Lone trees in fields:** they make drawing harder (you steer around them).
-   Fine, or keep them only on lanes?
+1. Boost: trucks only; boosting on a field leaves muddy tyre marks.
+2. Hose: the farmer gets out, picks up the hose with the use key, holds it
+   and aims at the machine.
+3. Engine upgrades: several levels, plus one more fun item like the ball.
+4. Egg sandwich as planned; add a cinnamon bun (+10% speed for the day).
+5. 3-player: two views on top, one wide view below; also an option for a
+   window per player to spread across monitors.
+6. Player 3 on the numpad; the designer's mini keyboard (3 keys and a knob)
+   is bound through the settings screen.
+7. Trees on grass only, with soft bouncy crowns overhanging the wheat.
+
+## Still open
+
+See the latest questions to the designer; answers go here.
 
 ## Untouched here
 
